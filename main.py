@@ -1,8 +1,10 @@
-from fastapi import FastAPI
+from fastapi import FastAPI, File, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic_settings import BaseSettings, SettingsConfigDict
+from typing import Annotated
 
-from tsapi.model.dataset import load_electricity_data
+
+from tsapi.model.dataset import load_electricity_data, save_dataset_source
 
 from tsapi.model.dataset import DataSet
 from tsapi.model.time_series import TimePoint, TimeSeries, TimeRecord
@@ -49,6 +51,7 @@ app = FastAPI()
 origins = [
     "http://localhost",
     "http://localhost:3000",
+    "http://localhost:5173",
 ]
 
 app.add_middleware(
@@ -103,3 +106,13 @@ async def get_multiple_time_series(series_ids: str, offset: int = 0, limit: int 
         )
 
     return TimeSeries(id=series_ids, name="electricity", data=tsdata)
+
+
+@app.post("/files")
+async def create_file(file: Annotated[bytes, File()]):
+    return save_dataset_source("electricity", settings.data_dir, file)
+
+
+@app.post("/uploadfile/")
+async def create_upload_file(file: UploadFile):
+    return {"filename": file.filename}

@@ -33,7 +33,7 @@ def dataset_df_no_time():
 
 
 def test_dataset_parse(dataset_df):
-    dset = parse_dataset(dataset_df)
+    dset = parse_dataset(dataset_df, "test", "test description", "test.parquet")
 
     assert len(dset.series_cols) == 2
     assert len(dset.timestamp_cols) == 1
@@ -43,4 +43,4 @@ def test_dataset_parse(dataset_df):
 
 def test_dataset_parse_no_time(dataset_df_no_time):
     with pytest.raises(ValueError):
-        parse_dataset(dataset_df_no_time)
+        parse_dataset(dataset_df_no_time, "test", "test description", "test.parquet")

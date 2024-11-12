@@ -14,13 +14,31 @@ class DataSet(BaseModel):
     file_name: str
 
     def load(self, data_dir):
-        return pl.read_parquet((os.path.join(data_dir,self.file_name)))
+        return pl.read_parquet((os.path.join(data_dir, self.file_name)))
 
     def tscol(self):
         return self.timestamp_cols[0]
 
 
-def parse_dataset(dataframe: pl.DataFrame) -> DataSet:
+def save_dataset_source(name: str, data_dir: str, data: bytes):
+    source_file_name = os.path.join(data_dir, f'{name}_source.csv')
+    with open(source_file_name, 'wb') as f:
+        f.write(data)
+
+    df = pl.read_csv(source_file_name, has_header=True, try_parse_dates=True)
+
+    dataset_file_name = f'{name}.parquet'
+    df.write_parquet(os.path.join(data_dir, dataset_file_name))
+
+    return parse_dataset(df, name, '', dataset_file_name)
+
+
+def parse_dataset(
+        dataframe: pl.DataFrame,
+        name: str,
+        description: str,
+        dataset_file_name: str
+) -> DataSet:
     """ Maybe a method of dataset? """
 
     series = []
@@ -31,20 +49,19 @@ def parse_dataset(dataframe: pl.DataFrame) -> DataSet:
             series.append(k)
         elif v.is_temporal():
             times.append(k)
-            print(f"Numeric: {k}")
 
     if len(times) == 0:
         raise ValueError("No timestamp columns found")
 
     return DataSet(
         id=1,
-        name="electricity",
-        description="Electricity load",
+        name=name,
+        description=description,
         num_series=len(series),
         max_length=len(dataframe),
         series_cols=series,
         timestamp_cols=times,
-        file_name='electricityloaddiagrams20112014.parquet'
+        file_name=dataset_file_name
     )
 
 
