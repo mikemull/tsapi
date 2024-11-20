@@ -1,10 +1,13 @@
 import os
+import math
+import re
+
 import polars as pl
 from pydantic import BaseModel
 
 
 class DataSet(BaseModel):
-    id: int
+    id: str
     name: str
     description: str = None
     num_series: int
@@ -16,6 +19,7 @@ class DataSet(BaseModel):
     def load(self, data_dir):
         return pl.read_parquet((os.path.join(data_dir, self.file_name)))
 
+    @property
     def tscol(self):
         return self.timestamp_cols[0]
 
@@ -54,7 +58,7 @@ def parse_dataset(
         raise ValueError("No timestamp columns found")
 
     return DataSet(
-        id=1,
+        id="abc",
         name=name,
         description=description,
         num_series=len(series),
@@ -63,6 +67,45 @@ def parse_dataset(
         timestamp_cols=times,
         file_name=dataset_file_name
     )
+
+
+def parse_timeseries_descriptor(descriptor: str):
+    """
+    Parse a descriptor string into dataset and series names
+
+    The descriptor will be in the form:
+    <dataset_name>:[<series1>,<series2>,...]
+
+    :param descriptor:
+    :return: list of tuples of dataset name and series names
+    """
+    m = re.match(r'(.+):(.+)', descriptor)
+    if m:
+        return m.group(1), m.group(2).split(',')
+    else:
+        raise ValueError("Invalid descriptor")
+
+
+def infer_frequency(df: pl.DataFrame, timestamp_col: str) -> str:
+    """
+    Infer the frequency of a time series from the data
+
+    :param df: DataFrame with a timestamp column
+    :return: frequency string
+    """
+    df = df.sort(timestamp_col)
+    freq_counts = (df[timestamp_col] - df[timestamp_col].shift(1)).value_counts().max()
+
+    max_freq = freq_counts[timestamp_col][0]
+
+    points_per_group = math.floor(len(df) / 1000)
+
+    s = int((points_per_group * max_freq).total_seconds())
+    print(max_freq)
+    print(s)
+    print(df)
+
+    return df.group_by_dynamic(timestamp_col, every=f'{s}s').agg(pl.all().mean())
 
 
 def load_electricity_data(data_dir) -> pl.DataFrame:

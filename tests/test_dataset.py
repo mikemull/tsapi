@@ -3,7 +3,7 @@ from datetime import datetime
 import polars as pl
 import pytest
 
-from tsapi.model.dataset import parse_dataset
+from tsapi.model.dataset import parse_dataset, parse_timeseries_descriptor
 
 
 @pytest.fixture()
@@ -44,3 +44,13 @@ def test_dataset_parse(dataset_df):
 def test_dataset_parse_no_time(dataset_df_no_time):
     with pytest.raises(ValueError):
         parse_dataset(dataset_df_no_time, "test", "test description", "test.parquet")
+
+
+def test_dataset_descriptor():
+    ds, ts = parse_timeseries_descriptor("test:series1,series2,series3")
+    assert ds == "test"
+    assert ts == ["series1", "series2", "series3"]
+
+    ds, ts = parse_timeseries_descriptor("test2:series3")
+    assert ds == "test2"
+    assert ts == ["series3"]
