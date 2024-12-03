@@ -1,4 +1,3 @@
-import asyncio
 from bson import ObjectId
 
 import motor.motor_asyncio

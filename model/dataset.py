@@ -5,6 +5,8 @@ import re
 import polars as pl
 from pydantic import BaseModel
 
+MAX_POINTS = 10000  # TODO: make this a setting
+
 
 class DataSet(BaseModel):
     id: str
@@ -86,7 +88,7 @@ def parse_timeseries_descriptor(descriptor: str):
         raise ValueError("Invalid descriptor")
 
 
-def infer_frequency(df: pl.DataFrame, timestamp_col: str) -> str:
+def adjust_frequency(df: pl.DataFrame, timestamp_col: str) -> str:
     """
     Infer the frequency of a time series from the data
 
@@ -94,16 +96,17 @@ def infer_frequency(df: pl.DataFrame, timestamp_col: str) -> str:
     :return: frequency string
     """
     df = df.sort(timestamp_col)
-    freq_counts = (df[timestamp_col] - df[timestamp_col].shift(1)).value_counts().max()
+    freq_counts = (df[timestamp_col] - df[timestamp_col].shift(1)).value_counts().drop_nulls()
 
-    max_freq = freq_counts[timestamp_col][0]
+    if len(freq_counts) == 1:
+        max_freq = freq_counts.sort('count', descending=True).head(1)[timestamp_col][0]
 
-    points_per_group = math.floor(len(df) / 1000)
+        points_per_group = math.floor(len(df) / MAX_POINTS)
 
-    s = int((points_per_group * max_freq).total_seconds())
-    print(max_freq)
-    print(s)
-    print(df)
+        s = int((points_per_group * max_freq).total_seconds())
+    else:
+        time_delta_per_group = (df[timestamp_col].max() - df[timestamp_col].min()) / MAX_POINTS
+        s = int(time_delta_per_group.total_seconds())
 
     return df.group_by_dynamic(timestamp_col, every=f'{s}s').agg(pl.all().mean())
 
