@@ -1,11 +1,11 @@
-from fastapi import FastAPI, File, UploadFile, Form
+from fastapi import FastAPI, File, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic_settings import BaseSettings, SettingsConfigDict
 from typing import Annotated
 
 
 from tsapi.model.dataset import (
-    DataSet, parse_timeseries_descriptor, infer_frequency, load_electricity_data, save_dataset_source
+    DataSet, parse_timeseries_descriptor, adjust_frequency, load_electricity_data, save_dataset_source
 )
 
 from tsapi.model.time_series import TimePoint, TimeSeries, TimeRecord
@@ -67,12 +67,11 @@ async def get_multiple_time_series(series_ids: str, offset: int = 0, limit: int 
 
     dataset_data = await MongoClient().get_dataset(dataset_id)
     dataset = DataSet(**dataset_data)
-    print(dataset.tscol)
-    df = infer_frequency(dataset.load(settings.data_dir), dataset.tscol)
-    print(df)
+    df = dataset.load(settings.data_dir).slice(offset, limit)
+    df_adj = adjust_frequency(df, dataset.tscol)
 
     tsdata = []
-    for x in df.slice(offset, limit).iter_rows(named=True):
+    for x in df_adj.iter_rows(named=True):
         tsdata.append(
             TimeRecord(timestamp=x[dataset.tscol], data={k: x[k] for k in ts_list})
         )
