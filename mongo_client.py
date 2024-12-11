@@ -23,3 +23,20 @@ class MongoClient:
         doc = await self.db.datasets.find_one({"_id": ObjectId(dataset_id)})
         doc['id'] = str(doc['_id'])
         return doc
+
+    async def insert_opset(self, opset):
+        result = await self.db.opsets.insert_one(opset)
+        return str(result.inserted_id)
+
+    async def get_opset(self, opset_id):
+        doc = await self.db.opsets.find_one({"_id": ObjectId(opset_id)})
+
+        if doc['id'] is None or doc['id'] == '0':
+            doc['id'] = str(doc['_id'])
+        return doc
+
+    async def update_opset(self, opset_id, opset):
+        result = await self.db.opsets.replace_one({"_id": ObjectId(opset_id)}, opset)
+        if result.matched_count == 0:
+            return None
+        return await self.get_opset(opset_id)

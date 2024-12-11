@@ -1,6 +1,7 @@
 import os
 import math
 import re
+from typing import Optional
 
 import polars as pl
 from pydantic import BaseModel
@@ -24,6 +25,13 @@ class DataSet(BaseModel):
     @property
     def tscol(self):
         return self.timestamp_cols[0]
+
+
+class OperationSet(BaseModel):
+    id: str
+    dataset_id: str
+    plot: list[str] = []
+    dependent: Optional[str] = None
 
 
 def save_dataset_source(name: str, data_dir: str, data: bytes):
@@ -95,9 +103,11 @@ def adjust_frequency(df: pl.DataFrame, timestamp_col: str) -> str:
     :param df: DataFrame with a timestamp column
     :return: frequency string
     """
+    if len(df) < MAX_POINTS:
+        return df
+
     df = df.sort(timestamp_col)
     freq_counts = (df[timestamp_col] - df[timestamp_col].shift(1)).value_counts().drop_nulls()
-
     if len(freq_counts) == 1:
         max_freq = freq_counts.sort('count', descending=True).head(1)[timestamp_col][0]
 
