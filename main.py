@@ -40,7 +40,7 @@ app.add_middleware(
 
 @app.get("/")
 async def root():
-    return {"message": "Hello World"}
+    return {"message": "This is the Time Series API"}
 
 
 @app.get("/datasets")
@@ -71,7 +71,6 @@ async def update_opset(opset_id: str, opset: OperationSet) -> OperationSet:
 @app.get("/opsets/{opset_id}")
 async def get_opset(opset_id: str) -> OperationSet:
     opset = await MongoClient().get_opset(opset_id)
-    print(opset)
     return opset
 
 

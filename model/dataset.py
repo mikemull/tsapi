@@ -9,6 +9,13 @@ from pydantic import BaseModel
 MAX_POINTS = 10000  # TODO: make this a setting
 
 
+class OperationSet(BaseModel):
+    id: str
+    dataset_id: str
+    plot: list[str] = []
+    dependent: Optional[str] = None
+
+
 class DataSet(BaseModel):
     id: str
     name: str
@@ -18,6 +25,7 @@ class DataSet(BaseModel):
     series_cols: list[str] = []
     timestamp_cols: list[str] = []
     file_name: str
+    ops: list[OperationSet] = []
 
     def load(self, data_dir):
         return pl.read_parquet((os.path.join(data_dir, self.file_name)))
@@ -25,13 +33,6 @@ class DataSet(BaseModel):
     @property
     def tscol(self):
         return self.timestamp_cols[0]
-
-
-class OperationSet(BaseModel):
-    id: str
-    dataset_id: str
-    plot: list[str] = []
-    dependent: Optional[str] = None
 
 
 def save_dataset_source(name: str, data_dir: str, data: bytes):

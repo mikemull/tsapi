@@ -17,6 +17,7 @@ class MongoClient:
         docs = [doc for doc in await cursor.to_list(length=100)]
         for doc in docs:
             doc['id'] = str(doc['_id'])
+            doc['ops'] = await self.get_opsets_for_dataset(doc['id'])
         return docs
 
     async def get_dataset(self, dataset_id):
@@ -34,6 +35,14 @@ class MongoClient:
         if doc['id'] is None or doc['id'] == '0':
             doc['id'] = str(doc['_id'])
         return doc
+
+    async def get_opsets_for_dataset(self, dataset_id):
+        cursor = self.db.opsets.find({"dataset_id": dataset_id})
+        opsets = [doc for doc in await cursor.to_list(length=100)]
+        for ops in opsets:
+            if ops['id'] is None or ops['id'] == '0':
+                ops['id'] = str(ops['_id'])
+        return opsets
 
     async def update_opset(self, opset_id, opset):
         result = await self.db.opsets.replace_one({"_id": ObjectId(opset_id)}, opset)
