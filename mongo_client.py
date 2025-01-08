@@ -4,13 +4,13 @@ import motor.motor_asyncio
 
 
 class MongoClient:
-    def __init__(self):
-        self.client = motor.motor_asyncio.AsyncIOMotorClient('localhost', 27017)
-        self.db = self.client['tsapidb']
+    def __init__(self, settings):
+        self.client = motor.motor_asyncio.AsyncIOMotorClient(settings.mdb_host, settings.mdb_port)
+        self.db = self.client[settings.mdb_name]
 
     async def insert_dataset(self, dataset):
         result = await self.db.datasets.insert_one(dataset)
-        return repr(result.inserted_id)
+        return str(result.inserted_id)
 
     async def get_datasets(self):
         cursor = self.db.datasets.find({})
