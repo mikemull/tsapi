@@ -2,7 +2,7 @@
 from fastapi.testclient import TestClient
 from pydantic_settings import BaseSettings
 
-from tsapi.main import app, get_settings
+from main import app, get_settings
 from tsapi.model.dataset import OperationSet
 
 
