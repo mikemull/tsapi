@@ -1,4 +1,4 @@
-from fastapi import FastAPI, File, UploadFile, HTTPException
+from fastapi import FastAPI, File, UploadFile, HTTPException, Depends
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic_settings import BaseSettings, SettingsConfigDict
 from typing import Annotated
@@ -15,6 +15,10 @@ from tsapi.mongo_client import MongoClient
 class Settings(BaseSettings):
     app_name: str = "Time Series API"
     data_dir: str
+
+    mdb_host: str = "localhost"
+    mdb_port: int = 27017
+    mdb_name: str = "tsapidb"
 
     model_config = SettingsConfigDict(env_file=".env")
 
@@ -38,31 +42,35 @@ app.add_middleware(
 )
 
 
+def get_settings():
+    return Settings()
+
+
 @app.get("/")
 async def root():
     return {"message": "This is the Time Series API"}
 
 
 @app.get("/datasets")
-async def get_datasets() -> list[DataSet]:
-    return await MongoClient().get_datasets()
+async def get_datasets(config: Settings = Depends(get_settings)) -> list[DataSet]:
+    return await MongoClient(config).get_datasets()
 
 
 @app.get("/datasets/{dataset_id}")
-async def get_dataset(dataset_id: str) -> DataSet:
-    return await MongoClient().get_dataset(dataset_id)
+async def get_dataset(dataset_id: str, config: Settings = Depends(get_settings)) -> DataSet:
+    return await MongoClient(config).get_dataset(dataset_id)
 
 
 @app.post("/opsets")
-async def create_opset(opset: OperationSet):
-    opset_id = await MongoClient().insert_opset(opset.model_dump())
+async def create_opset(opset: OperationSet, config: Settings = Depends(get_settings)):
+    opset_id = await MongoClient(config).insert_opset(opset.model_dump())
     opset.id = opset_id
     return opset
 
 
 @app.put("/opsets/{opset_id}")
 async def update_opset(opset_id: str, opset: OperationSet) -> OperationSet:
-    opset = await MongoClient().update_opset(opset_id, opset.model_dump())
+    opset = await MongoClient(settings).update_opset(opset_id, opset.model_dump())
     if opset is None:
         raise HTTPException(status_code=404, detail="Opset not found")
     return opset
@@ -70,7 +78,7 @@ async def update_opset(opset_id: str, opset: OperationSet) -> OperationSet:
 
 @app.get("/opsets/{opset_id}")
 async def get_opset(opset_id: str) -> OperationSet:
-    opset = await MongoClient().get_opset(opset_id)
+    opset = await MongoClient(settings).get_opset(opset_id)
     return opset
 
 
@@ -91,7 +99,7 @@ async def get_multiple_time_series(series_ids: str, offset: int = 0, limit: int 
 
     dataset_id, ts_list = parse_timeseries_descriptor(series_ids)
 
-    dataset_data = await MongoClient().get_dataset(dataset_id)
+    dataset_data = await MongoClient(settings).get_dataset(dataset_id)
     dataset = DataSet(**dataset_data)
     df = dataset.load(settings.data_dir).slice(offset, limit)
     df_adj = adjust_frequency(df, dataset.tscol)
@@ -106,11 +114,13 @@ async def get_multiple_time_series(series_ids: str, offset: int = 0, limit: int 
 
 
 @app.get("/tsop/{opset_id}")
-async def get_op_time_series(opset_id: str, offset: int = 0, limit: int = 100) -> TimeSeries:
-    opset = await MongoClient().get_opset(opset_id)
+async def get_op_time_series(
+        opset_id: str, offset: int = 0, limit: int = 100, config: Settings = Depends(get_settings)
+) -> TimeSeries:
+    opset = await MongoClient(config).get_opset(opset_id)
     opset = OperationSet(**opset)
 
-    dataset_data = await MongoClient().get_dataset(opset.dataset_id)
+    dataset_data = await MongoClient(settings).get_dataset(opset.dataset_id)
     dataset = DataSet(**dataset_data)
     df = dataset.load(settings.data_dir).slice(offset, limit)
     df_adj = adjust_frequency(df, dataset.tscol)
