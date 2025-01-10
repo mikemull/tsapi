@@ -24,7 +24,7 @@ jobs:
         run: uv run ruff check .
 
       - name: updating PATH to enable importing my package
-        run: echo "PYTHONPATH=./tsapi" >> $GITHUB_ENV
+        run: echo "PYTHONPATH=." >> $GITHUB_ENV
         shell: bash
 
       - name: Run tests
