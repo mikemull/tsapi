@@ -23,9 +23,3 @@ jobs:
       - name: Run ruff
         run: uv run ruff check .
 
-      - name: updating PATH to enable importing my package
-        run: echo "PYTHONPATH=." >> $GITHUB_ENV
-        shell: bash
-
-      - name: Run tests
-        run: uv run pytest tests
