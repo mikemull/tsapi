@@ -23,3 +23,10 @@ jobs:
       - name: Run ruff
         run: uv run ruff check .
 
+      - name: Start MongoDB
+        uses: supercharge/mongodb-github-action@1.12.0
+        with:
+            mongodb-version: 8.0
+
+      - name: Run tests
+        run: uv run pytest
