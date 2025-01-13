@@ -35,7 +35,7 @@ jobs:
             echo "DATA_DIR=." > .env
             echo "MDB_HOST=localhost" >> .env
             echo "MDB_PORT=27017" >> .env
-            echo "MDB_USER=user" >> .env
+            echo "MDB_NAME=test_tsapidb" >> .env
 
         shell: bash
 
