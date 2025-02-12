@@ -5,7 +5,7 @@ import motor.motor_asyncio
 
 class MongoClient:
     def __init__(self, settings):
-        self.client = motor.motor_asyncio.AsyncIOMotorClient(settings.mdb_host, settings.mdb_port)
+        self.client = motor.motor_asyncio.AsyncIOMotorClient(settings.mdb_url)
         self.db = self.client[settings.mdb_name]
 
     async def insert_dataset(self, dataset):

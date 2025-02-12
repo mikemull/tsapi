@@ -20,4 +20,5 @@ WORKDIR /app
 RUN uv sync --frozen
 
 ENV PYTHONPATH="/app"
-CMD ["uv", "run", "pytest", "tests"]
+# CMD ["uv", "run", "pytest", "tests"]
+CMD ["uv", "run", "uvicorn", "main:app", "--host", "0.0.0.0", "--port", "1729"]

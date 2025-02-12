@@ -1,7 +1,9 @@
+from typing import Annotated, Any
+
+import environ
 from fastapi import FastAPI, File, UploadFile, HTTPException, Depends
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic_settings import BaseSettings, SettingsConfigDict
-from typing import Annotated
 
 
 from tsapi.model.dataset import (
@@ -15,15 +17,42 @@ from tsapi.mongo_client import MongoClient
 class Settings(BaseSettings):
     app_name: str = "Time Series API"
     data_dir: str
+    secrets_dir: str = "/var/secrets"
+    secrets: Any = None
 
+    mdb_user: str = "tsapiuser"
     mdb_host: str = "localhost"
     mdb_port: int = 27017
     mdb_name: str = "tsapidb"
+    mdb_scheme: str = "mongodb"
+    mdb_options: str = ""
 
     model_config = SettingsConfigDict(env_file=".env")
 
+    @property
+    def mdb_url(self):
+        url = f"{self.mdb_scheme}://{self.mdb_user}:{self.secrets.mdb_password}@{self.mdb_host}:{self.mdb_port}/{self.mdb_name}"
+
+        if self.mdb_options:
+            url += f"?{self.mdb_options}"
+
+        return url
+
 
 settings = Settings()
+
+# Kinda silly maybe, but i like how environ does secrets.  Maybe should just
+# ditch pydantic for settings?
+file_secrets = environ.secrets.DirectorySecrets.from_path(settings.secrets_dir)
+
+
+@environ.config
+class SecretConfig:
+    mdb_password = file_secrets.secret()
+
+
+settings.secrets = SecretConfig.from_environ()
+
 
 app = FastAPI()
 
@@ -43,7 +72,9 @@ app.add_middleware(
 
 
 def get_settings():
-    return Settings()
+    curr_settings = Settings()
+    curr_settings.secrets = SecretConfig.from_environ()
+    return curr_settings
 
 
 @app.get("/")
@@ -135,7 +166,7 @@ async def get_op_time_series(
 @app.post("/files")
 async def create_file(name: Annotated[str, File()], file: Annotated[bytes, File()]):
     dataset = save_dataset_source(name, settings.data_dir, file)
-    id = await MongoClient().insert_dataset(dataset.model_dump())
+    id = await MongoClient(settings).insert_dataset(dataset.model_dump())
     return id
 
 
