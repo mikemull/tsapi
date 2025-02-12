@@ -10,7 +10,7 @@ class Settings(BaseSettings):
     mdb_host: str = "localhost"
     mdb_port: int = 27017
     mdb_name: str = "test_tsapidb"
-    mdb_url: str = f"mongodb://localhost:27017/test_tsapidb"
+    mdb_url: str = "mongodb://localhost:27017/test_tsapidb"
 
 
 def override_get_settings():
