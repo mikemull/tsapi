@@ -36,6 +36,8 @@ jobs:
             echo "MDB_HOST=localhost" >> .env
             echo "MDB_PORT=27017" >> .env
             echo "MDB_NAME=test_tsapidb" >> .env
+            echo "SECRETS_DIR=." >> .env
+            echo "XXX" >> mdb_password
 
         shell: bash
 
