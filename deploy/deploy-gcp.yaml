@@ -25,6 +25,9 @@ spec:
       - name: "tsapi-1"
         image: "us-west1-docker.pkg.dev/website-410522/tsnext/tsapi:v1"
         imagePullPolicy: Always
+        envFrom:
+          - configMapRef:
+              name: tsapi-config
         volumeMounts:
           - mountPath: "/var/secrets"
             name: tsapi-secret

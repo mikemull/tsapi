@@ -8,7 +8,7 @@ spec:
     app: tsapi
   type: NodePort
   ports:
-  - name: tsapu-service-port
+  - name: tsapi-service-port
     protocol: TCP
-    port: 80
+    port: 1729
     targetPort: 1729
