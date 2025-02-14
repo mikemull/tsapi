@@ -25,6 +25,14 @@ spec:
       - name: "tsapi-1"
         image: "us-west1-docker.pkg.dev/website-410522/tsnext/tsapi:v1"
         imagePullPolicy: Always
+        livenessProbe:
+          failureThreshold: 3
+          httpGet:
+            path: /health
+            port: 1729
+          initialDelaySeconds: 3
+          periodSeconds: 30
+          timeoutSeconds: 1
         envFrom:
           - configMapRef:
               name: tsapi-config

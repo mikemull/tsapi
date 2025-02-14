@@ -2,6 +2,7 @@ from typing import Annotated, Any
 
 import environ
 from fastapi import FastAPI, File, UploadFile, HTTPException, Depends
+from fastapi.responses import PlainTextResponse
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
@@ -82,6 +83,11 @@ def get_settings():
 @app.get("/")
 async def root():
     return {"message": "This is the Time Series API"}
+
+
+@app.get("/health", response_class=PlainTextResponse)
+async def root():
+    return "OK"
 
 
 @app.get("/tsapi/v1/datasets")
