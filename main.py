@@ -1,7 +1,10 @@
+from typing import Annotated, Any
+
+import environ
 from fastapi import FastAPI, File, UploadFile, HTTPException, Depends
+from fastapi.responses import PlainTextResponse
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic_settings import BaseSettings, SettingsConfigDict
-from typing import Annotated
 
 
 from tsapi.model.dataset import (
@@ -15,15 +18,44 @@ from tsapi.mongo_client import MongoClient
 class Settings(BaseSettings):
     app_name: str = "Time Series API"
     data_dir: str
+    secrets_dir: str = "/var/secrets"
+    secrets: Any = None
 
+    mdb_user: str = "tsapiuser"
     mdb_host: str = "localhost"
     mdb_port: int = 27017
     mdb_name: str = "tsapidb"
+    mdb_scheme: str = "mongodb"
+    mdb_options: str = ""
 
     model_config = SettingsConfigDict(env_file=".env")
 
+    @property
+    def mdb_url(self):
+        """MongoDB connection URL"""
+        # NB: Leaving out port for now because mongodb+srv can't use it.
+        url = f"{self.mdb_scheme}://{self.mdb_user}:{self.secrets.mdb_password}@{self.mdb_host}/{self.mdb_name}"
+
+        if self.mdb_options:
+            url += f"?{self.mdb_options}"
+
+        return url
+
 
 settings = Settings()
+
+# Kinda silly maybe, but i like how environ does secrets.  Maybe should just
+# ditch pydantic for settings?
+file_secrets = environ.secrets.DirectorySecrets.from_path(settings.secrets_dir)
+
+
+@environ.config
+class SecretConfig:
+    mdb_password = file_secrets.secret()
+
+
+settings.secrets = SecretConfig.from_environ()
+
 
 app = FastAPI()
 
@@ -43,7 +75,9 @@ app.add_middleware(
 
 
 def get_settings():
-    return Settings()
+    curr_settings = Settings()
+    curr_settings.secrets = SecretConfig.from_environ()
+    return curr_settings
 
 
 @app.get("/")
@@ -51,24 +85,29 @@ async def root():
     return {"message": "This is the Time Series API"}
 
 
-@app.get("/datasets")
+@app.get("/health", response_class=PlainTextResponse)
+async def health():
+    return "OK"
+
+
+@app.get("/tsapi/v1/datasets")
 async def get_datasets(config: Settings = Depends(get_settings)) -> list[DataSet]:
     return await MongoClient(config).get_datasets()
 
 
-@app.get("/datasets/{dataset_id}")
+@app.get("/tsapi/v1/datasets/{dataset_id}")
 async def get_dataset(dataset_id: str, config: Settings = Depends(get_settings)) -> DataSet:
     return await MongoClient(config).get_dataset(dataset_id)
 
 
-@app.post("/opsets")
+@app.post("/tsapi/v1/opsets")
 async def create_opset(opset: OperationSet, config: Settings = Depends(get_settings)):
     opset_id = await MongoClient(config).insert_opset(opset.model_dump())
     opset.id = opset_id
     return opset
 
 
-@app.put("/opsets/{opset_id}")
+@app.put("/tsapi/v1/opsets/{opset_id}")
 async def update_opset(opset_id: str, opset: OperationSet) -> OperationSet:
     opset = await MongoClient(settings).update_opset(opset_id, opset.model_dump())
     if opset is None:
@@ -76,13 +115,13 @@ async def update_opset(opset_id: str, opset: OperationSet) -> OperationSet:
     return opset
 
 
-@app.get("/opsets/{opset_id}")
+@app.get("/tsapi/v1/opsets/{opset_id}")
 async def get_opset(opset_id: str) -> OperationSet:
     opset = await MongoClient(settings).get_opset(opset_id)
     return opset
 
 
-@app.get("/ts/{series_id}")
+@app.get("/tsapi/v1/ts/{series_id}")
 async def get_time_series(series_id: str, offset: int = 0, limit: int = 100, ts_col=None) -> TimeSeries:
     df = load_electricity_data(settings.data_dir)
 
@@ -94,7 +133,7 @@ async def get_time_series(series_id: str, offset: int = 0, limit: int = 100, ts_
                       data=tsdata)
 
 
-@app.get("/tsm/{series_ids}")
+@app.get("/tsapi/v1/tsm/{series_ids}")
 async def get_multiple_time_series(series_ids: str, offset: int = 0, limit: int = 100) -> TimeSeries:
 
     dataset_id, ts_list = parse_timeseries_descriptor(series_ids)
@@ -113,7 +152,7 @@ async def get_multiple_time_series(series_ids: str, offset: int = 0, limit: int 
     return TimeSeries(id=series_ids, name="electricity", data=tsdata)
 
 
-@app.get("/tsop/{opset_id}")
+@app.get("/tsapi/v1/tsop/{opset_id}")
 async def get_op_time_series(
         opset_id: str, offset: int = 0, limit: int = 100, config: Settings = Depends(get_settings)
 ) -> TimeSeries:
@@ -132,13 +171,13 @@ async def get_op_time_series(
     return TimeSeries(id=opset_id, name="electricity", data=tsdata)
 
 
-@app.post("/files")
+@app.post("/tsapi/v1/files")
 async def create_file(name: Annotated[str, File()], file: Annotated[bytes, File()]):
     dataset = save_dataset_source(name, settings.data_dir, file)
-    id = await MongoClient().insert_dataset(dataset.model_dump())
+    id = await MongoClient(settings).insert_dataset(dataset.model_dump())
     return id
 
 
-@app.post("/uploadfile/")
+@app.post("/tsapi/v1/uploadfile/")
 async def create_upload_file(file: UploadFile):
     return {"filename": file.filename}

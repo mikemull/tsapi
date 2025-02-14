@@ -1,0 +1,49 @@
+---
+apiVersion: "v1"
+kind: "Namespace"
+metadata:
+  name: "tsnext"
+---
+apiVersion: "apps/v1"
+kind: "Deployment"
+metadata:
+  name: "deployment-api"
+  namespace: "tsnext"
+  labels:
+    app: "tsapi"
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: "tsapi"
+  template:
+    metadata:
+      labels:
+        app: "tsapi"
+    spec:
+      containers:
+      - name: "tsapi-1"
+        image: "us-west1-docker.pkg.dev/website-410522/tsnext/tsapi:v1"
+        imagePullPolicy: Always
+        livenessProbe:
+          failureThreshold: 3
+          httpGet:
+            path: /health
+            port: 1729
+          initialDelaySeconds: 3
+          periodSeconds: 30
+          timeoutSeconds: 1
+        envFrom:
+          - configMapRef:
+              name: tsapi-config
+        volumeMounts:
+          - mountPath: "/var/secrets"
+            name: tsapi-secret
+      serviceAccountName: tsnextsa
+      volumes:
+        - name: tsapi-secret
+          csi:
+            driver: secrets-store-gke.csi.k8s.io
+            readOnly: true
+            volumeAttributes:
+              secretProviderClass: tsapi-secret-provider

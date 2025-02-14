@@ -1,0 +1,11 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: tsapi-config
+data:
+  DATA_DIR: gs://tsapi_bucket/datasets/
+  SECRETS_DIR: /var/secrets
+  MDB_HOST: tsapicluster0.2lkfb.mongodb.net
+  MDB_SCHEME: mongodb+srv
+  MDB_OPTIONS: retryWrites=true&w=majority&appName=TSAPICluster0
+  VITE_TSAPI_URL: http://tsapi-service.tsnext.svc.cluster.local:1729

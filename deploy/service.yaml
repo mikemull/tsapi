@@ -1,0 +1,14 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: tsapi-service
+  namespace: tsnext
+spec:
+  selector:
+    app: tsapi
+  type: NodePort
+  ports:
+  - name: tsapi-service-port
+    protocol: TCP
+    port: 3000
+    targetPort: 1729

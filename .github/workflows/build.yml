@@ -23,3 +23,23 @@ jobs:
       - name: Run ruff
         run: uv run ruff check .
 
+      - name: Start MongoDB
+        uses: supercharge/mongodb-github-action@1.12.0
+        with:
+            mongodb-version: 8.0
+
+      - name: updating PATH to enable importing my package
+        run: | 
+            echo "PYTHONPATH=." >> $GITHUB_ENV
+            touch .env
+            echo "DATA_DIR=." > .env
+            echo "MDB_HOST=localhost" >> .env
+            echo "MDB_PORT=27017" >> .env
+            echo "MDB_NAME=test_tsapidb" >> .env
+            echo "SECRETS_DIR=." >> .env
+            echo "XXX" >> mdb_password
+
+        shell: bash
+
+      - name: Run tests
+        run: uv run pytest
