@@ -86,7 +86,7 @@ async def root():
 
 
 @app.get("/health", response_class=PlainTextResponse)
-async def root():
+async def health():
     return "OK"
 
 
