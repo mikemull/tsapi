@@ -13,6 +13,7 @@ from tsapi.model.dataset import (
 
 from tsapi.model.time_series import TimePoint, TimeSeries, TimeRecord
 from tsapi.mongo_client import MongoClient
+from tsapi.errors import TsApiNoTimestampError
 
 
 class Settings(BaseSettings):
@@ -172,9 +173,20 @@ async def get_op_time_series(
 
 
 @app.post("/tsapi/v1/files")
-async def create_file(name: Annotated[str, File()], file: Annotated[bytes, File()]):
-    dataset = save_dataset_source(name, settings.data_dir, file)
-    id = await MongoClient(settings).insert_dataset(dataset.model_dump())
+async def create_file(
+        name: Annotated[str, File()],
+        upload_type: Annotated[str, File()],
+        file: Annotated[bytes, File()]
+):
+    print(f"Received file: {name}, type: {upload_type}")
+    if upload_type == "add":
+        raise HTTPException(status_code=400, detail="Invalid upload type")
+    try:
+        dataset = save_dataset_source(name, settings.data_dir, file)
+        id = await MongoClient(settings).insert_dataset(dataset.model_dump())
+    except TsApiNoTimestampError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
     return id
 
 

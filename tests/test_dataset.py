@@ -4,6 +4,7 @@ import polars as pl
 import pytest
 
 from tsapi.model.dataset import parse_dataset, parse_timeseries_descriptor
+from tsapi.errors import TsApiNoTimestampError
 
 
 @pytest.fixture()
@@ -42,7 +43,7 @@ def test_dataset_parse(dataset_df):
 
 
 def test_dataset_parse_no_time(dataset_df_no_time):
-    with pytest.raises(ValueError):
+    with pytest.raises(TsApiNoTimestampError):
         parse_dataset(dataset_df_no_time, "test", "test description", "test.parquet")
 
 
