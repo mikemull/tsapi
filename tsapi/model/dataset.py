@@ -6,6 +6,8 @@ from typing import Optional
 import polars as pl
 from pydantic import BaseModel
 
+from tsapi.errors import TsApiNoTimestampError
+
 MAX_POINTS = 10000  # TODO: make this a setting
 
 
@@ -36,6 +38,9 @@ class DataSet(BaseModel):
 
 
 def save_dataset_source(name: str, data_dir: str, data: bytes):
+    """ When a new CSV files is imported, this will save the original and
+        then attempt to convert it into a parquet file.
+    """
     source_file_name = os.path.join(data_dir, f'{name}_source.csv')
     with open(source_file_name, 'wb') as f:
         f.write(data)
@@ -66,7 +71,7 @@ def parse_dataset(
             times.append(k)
 
     if len(times) == 0:
-        raise ValueError("No timestamp columns found")
+        raise TsApiNoTimestampError("No timestamp columns found")
 
     return DataSet(
         id="abc",
