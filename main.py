@@ -5,7 +5,7 @@ from fastapi import FastAPI, File, UploadFile, HTTPException, Depends
 from fastapi.responses import PlainTextResponse
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic_settings import BaseSettings, SettingsConfigDict
-
+import structlog
 
 from tsapi.model.dataset import (
     DataSet, OperationSet, parse_timeseries_descriptor, adjust_frequency, load_electricity_data, save_dataset_source
@@ -57,8 +57,21 @@ class SecretConfig:
 
 settings.secrets = SecretConfig.from_environ()
 
+structlog.configure(
+    processors=[
+        structlog.processors.TimeStamper(fmt="ISO"),
+        structlog.processors.StackInfoRenderer(),
+        structlog.processors.format_exc_info,
+        structlog.processors.JSONRenderer()
+    ]
+)
+
+logger = structlog.get_logger()
+
 
 app = FastAPI()
+app.logger = logger
+
 
 origins = [
     "http://localhost",
@@ -157,6 +170,8 @@ async def get_multiple_time_series(series_ids: str, offset: int = 0, limit: int 
 async def get_op_time_series(
         opset_id: str, offset: int = 0, limit: int = 100, config: Settings = Depends(get_settings)
 ) -> TimeSeries:
+    logger.info("Get time series", opset_id=opset_id, offset=offset, limit=limit)
+
     opset = await MongoClient(config).get_opset(opset_id)
     opset = OperationSet(**opset)
 
@@ -178,16 +193,18 @@ async def create_file(
         upload_type: Annotated[str, File()],
         file: Annotated[bytes, File()]
 ):
-    print(f"Received file: {name}, type: {upload_type}")
+    logger.info("Received file: ", name=name, upload_type=upload_type)
+
     if upload_type == "add":
         raise HTTPException(status_code=400, detail="Invalid upload type")
     try:
         dataset = save_dataset_source(name, settings.data_dir, file)
-        id = await MongoClient(settings).insert_dataset(dataset.model_dump())
+        dataset_id = await MongoClient(settings).insert_dataset(dataset.model_dump())
     except TsApiNoTimestampError as e:
+        logger.error("No timestamp column found", name=name, error=str(e))
         raise HTTPException(status_code=400, detail=str(e))
 
-    return id
+    return dataset_id
 
 
 @app.post("/tsapi/v1/uploadfile/")
