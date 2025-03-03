@@ -1,7 +1,7 @@
 from typing import Annotated, Any
 
 import environ
-from fastapi import FastAPI, File, UploadFile, HTTPException, Depends
+from fastapi import FastAPI, File, HTTPException, Depends
 from fastapi.responses import PlainTextResponse
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic_settings import BaseSettings, SettingsConfigDict
@@ -192,7 +192,7 @@ async def create_file(
         name: Annotated[str, File()],
         upload_type: Annotated[str, File()],
         file: Annotated[bytes, File()]
-):
+) -> DataSet:
     logger.info("Received file: ", name=name, upload_type=upload_type)
 
     if upload_type == "add":
@@ -203,10 +203,8 @@ async def create_file(
     except TsApiNoTimestampError as e:
         logger.error("No timestamp column found", name=name, error=str(e))
         raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        logger.error("Unexpected error", name=name, error=str(e))
+        raise HTTPException(status_code=400, detail=str(e))
 
-    return dataset_id
-
-
-@app.post("/tsapi/v1/uploadfile/")
-async def create_upload_file(file: UploadFile):
-    return {"filename": file.filename}
+    return await MongoClient(settings).get_dataset(dataset_id)
