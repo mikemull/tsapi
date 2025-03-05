@@ -8,7 +8,8 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 import structlog
 
 from tsapi.model.dataset import (
-    DataSet, OperationSet, parse_timeseries_descriptor, adjust_frequency, load_electricity_data, save_dataset_source
+    DataSet, OperationSet, parse_timeseries_descriptor, adjust_frequency, load_electricity_data,
+    save_dataset, save_dataset_source
 )
 
 from tsapi.model.time_series import TimePoint, TimeSeries, TimeRecord
@@ -195,10 +196,14 @@ async def create_file(
 ) -> DataSet:
     logger.info("Received file: ", name=name, upload_type=upload_type)
 
-    if upload_type == "add":
-        raise HTTPException(status_code=400, detail="Invalid upload type")
     try:
-        dataset = save_dataset_source(name, settings.data_dir, file)
+        if upload_type == "add":
+            dataset = save_dataset(name, settings.data_dir, file)
+        elif upload_type == "import":
+            dataset = save_dataset_source(name, settings.data_dir, file)
+        else:
+            raise HTTPException(status_code=400, detail="Invalid upload type")
+
         dataset_id = await MongoClient(settings).insert_dataset(dataset.model_dump())
     except TsApiNoTimestampError as e:
         logger.error("No timestamp column found", name=name, error=str(e))

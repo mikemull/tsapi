@@ -1,3 +1,4 @@
+import io
 import os
 import math
 import re
@@ -35,6 +36,19 @@ class DataSet(BaseModel):
     @property
     def tscol(self):
         return self.timestamp_cols[0]
+
+
+def save_dataset(name: str, data_dir: str, data: bytes):
+    try:
+        df_parquet = pl.read_parquet(io.BytesIO(data))
+    except Exception as e:
+        print(f"Error reading parquet data: {e}")
+        df_parquet = None
+
+    dataset_file_name = f'{name}.parquet'
+    df_parquet.write_parquet(os.path.join(data_dir, dataset_file_name))
+
+    return parse_dataset(df_parquet, name, '', dataset_file_name)
 
 
 def save_dataset_source(name: str, data_dir: str, data: bytes):
