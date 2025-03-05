@@ -25,6 +25,16 @@ class MongoClient:
         doc['id'] = str(doc['_id'])
         return doc
 
+    async def get_dataset_by_name(self, name):
+        doc = await self.db.datasets.find_one({"name": name})
+        doc['id'] = str(doc['_id'])
+        return doc
+
+    async def delete_dataset(self, dataset_id):
+        _ = await self.db.opsets.delete_many({"dataset_id": dataset_id})
+        result = await self.db.datasets.delete_one({"_id": ObjectId(dataset_id)})
+        return result.deleted_count
+
     async def insert_opset(self, opset):
         result = await self.db.opsets.insert_one(opset)
         return str(result.inserted_id)
