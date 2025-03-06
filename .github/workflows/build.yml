@@ -6,6 +6,27 @@ on:
   push:
     branches: main
 
+
+jobs:
+  oidc_debug_test:
+    permissions:
+      contents: read
+      id-token: write
+    runs-on: ubuntu-latest
+    name: A test of the oidc debugger
+    steps:
+      - name: Checkout actions-oidc-debugger
+        uses: actions/checkout@v3
+        with:
+          repository: github/actions-oidc-debugger
+          ref: main
+          token: ${{ secrets.your-checkout-token }}
+          path: ./.github/actions/actions-oidc-debugger
+      - name: Debug OIDC Claims
+        uses: ./.github/actions/actions-oidc-debugger
+        with:
+          audience: '${{ github.server_url }}/${{ github.repository_owner }}'
+          
 jobs:
   uv-example:
     name: python
@@ -51,7 +72,6 @@ jobs:
         id: auth
         uses: 'google-github-actions/auth@v2'
         with:
-          token_format: 'access_token'
           project_id: ${{ secrets.PROJECT_ID }}
           service_account: githubactions@website-410522.iam.gserviceaccount.com
           workload_identity_provider: projects/52069167239/locations/global/workloadIdentityPools/website-dev-pool/providers/github-actions-provider
