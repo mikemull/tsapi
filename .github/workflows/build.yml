@@ -44,6 +44,15 @@ jobs:
       - name: Run tests
         run: uv run pytest
 
+      - name: Google Auth
+        id: auth
+        uses: 'google-github-actions/auth@v2'
+        with:
+          token_format: 'access_token'
+          project_id: ${{ secrets.PROJECT_ID }}
+          service_account: githubactions@website-410522.iam.gserviceaccount.com
+          workload_identity_provider: projects/52069167239/locations/global/workloadIdentityPools/website-dev-pool/providers/github-actions-provider
+
       - name: Build the Docker image
         run: |
           docker build . -t us-west1-docker.pkg.dev/${{ secrets.PROJECT_ID }}/tsapi:latest
