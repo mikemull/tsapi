@@ -26,8 +26,7 @@ jobs:
         uses: ./.github/actions/actions-oidc-debugger
         with:
           audience: '${{ github.server_url }}/${{ github.repository_owner }}'
-          
-jobs:
+
   uv-example:
     name: python
     runs-on: ubuntu-latest
