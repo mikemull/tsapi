@@ -56,6 +56,15 @@ jobs:
           service_account: githubactions@website-410522.iam.gserviceaccount.com
           workload_identity_provider: projects/52069167239/locations/global/workloadIdentityPools/website-dev-pool/providers/github-actions-provider
 
+      - name: Docker Auth
+        id: docker-auth
+        uses: 'docker/login-action@v1'
+        with:
+          username: 'oauth2accesstoken'
+          password: '${{ steps.auth.outputs.access_token }}'
+          registry: 'us-west1-docker.pkg.dev'
+
       - name: Build the Docker image
         run: |
           docker build . -t us-west1-docker.pkg.dev/${{ secrets.PROJECT_ID }}/tsapi:latest
+          docker push us-west1-docker.pkg.dev/${{ secrets.PROJECT_ID }}/tsapi:latest
