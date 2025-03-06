@@ -43,3 +43,7 @@ jobs:
 
       - name: Run tests
         run: uv run pytest
+
+      - name: Build the Docker image
+        run: |
+          docker build . -t us-west1-docker.pkg.dev/${{ secrets.PROJECT_ID }}/tsapi:latest
