@@ -67,5 +67,5 @@ jobs:
 
       - name: Build the Docker image
         run: |
-          docker build . -t us-west1-docker.pkg.dev/${{ secrets.PROJECT_ID }}/tsapi:latest
-          docker push us-west1-docker.pkg.dev/${{ secrets.PROJECT_ID }}/tsapi:latest
+          docker build . -t us-west1-docker.pkg.dev/${{ secrets.PROJECT_ID }}/tsnext/tsapi:latest
+          docker push us-west1-docker.pkg.dev/${{ secrets.PROJECT_ID }}/tsnext/tsapi:latest
