@@ -1,16 +1,16 @@
 import asyncio
-import os
+
 import polars as pl
 
 from tsapi.mongo_client import MongoClient
-from tsapi.model.dataset import parse_dataset
+from tsapi.model.dataset import DataSet
 from main import settings
 
 
 def add_dataset(name, description, file_path):
     df = pl.read_parquet(file_path)
 
-    dataset = parse_dataset(df, name, description, os.path.basename(file_path))
+    dataset = DataSet.from_dataframe(df, name, description)
 
     lup = asyncio.new_event_loop()
     client = MongoClient()
