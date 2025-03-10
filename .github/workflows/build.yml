@@ -54,7 +54,7 @@ jobs:
         with:
           token_format: access_token
           project_id: ${{ secrets.PROJECT_ID }}
-          service_account: githubactions@website-410522.iam.gserviceaccount.com
+          service_account: githubactions@${{ secrets.PROJECT_ID }}.iam.gserviceaccount.com
           workload_identity_provider: projects/52069167239/locations/global/workloadIdentityPools/website-dev-pool/providers/github-actions-provider
 
       - name: Docker Auth
