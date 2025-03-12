@@ -27,6 +27,7 @@ class DataSet(BaseModel):
     max_length: int
     series_cols: list[str] = []
     timestamp_cols: list[str] = []
+    other_cols: list[str] = []
     file_name: str
     ops: list[OperationSet] = []
 
@@ -37,18 +38,60 @@ class DataSet(BaseModel):
     def tscol(self):
         return self.timestamp_cols[0]
 
+    @staticmethod
+    def from_dataframe(dataframe: pl.DataFrame, name: str):
+        """ Extract metadata from columns and dtypes and also rename empty columns """
 
-def save_dataset(name: str, data_dir: str, data: bytes):
+        series = []
+        times = []
+        others = []
+
+        for col, value in dataframe.schema.items():
+            if value.is_numeric():
+                series.append(col)
+            elif value.is_temporal():
+                times.append(col)
+            else:
+                others.append(col)
+
+        if len(times) == 0:
+            raise TsApiNoTimestampError("No timestamp columns found")
+
+        return DataSet(
+            id="abc",
+            name=name,
+            description='',
+            num_series=len(series),
+            max_length=len(dataframe),
+            series_cols=series,
+            timestamp_cols=times,
+            other_cols=others,
+            file_name=f'{name}.parquet'
+        )
+
+
+def rename_blank_columns(df: pl.DataFrame):
+    iblank = 0
+    for col in df.columns:
+        if col.strip() == '':
+            df = df.rename({col: f'Unk:{iblank}'})
+            iblank += 1
+
+    return df
+
+
+def save_dataset(name: str, data_dir: str, data: bytes, logger):
     try:
         df_parquet = pl.read_parquet(io.BytesIO(data))
     except Exception as e:
-        print(f"Error reading parquet data: {e}")
+        logger.error(f"Error reading parquet data: {e}")
         df_parquet = None
 
-    dataset_file_name = f'{name}.parquet'
-    df_parquet.write_parquet(os.path.join(data_dir, dataset_file_name))
+    df_parquet = rename_blank_columns(df_parquet)
+    dataset = DataSet.from_dataframe(df_parquet, name)
+    df_parquet.write_parquet(os.path.join(data_dir, dataset.file_name))
 
-    return parse_dataset(df_parquet, name, '', dataset_file_name)
+    return dataset
 
 
 def save_dataset_source(name: str, data_dir: str, data: bytes):
@@ -61,42 +104,11 @@ def save_dataset_source(name: str, data_dir: str, data: bytes):
 
     df = pl.read_csv(source_file_name, has_header=True, try_parse_dates=True)
 
-    dataset_file_name = f'{name}.parquet'
-    df.write_parquet(os.path.join(data_dir, dataset_file_name))
+    df = rename_blank_columns(df)
+    dataset = DataSet.from_dataframe(df, name)
+    df.write_parquet(os.path.join(data_dir, dataset.file_name))
 
-    return parse_dataset(df, name, '', dataset_file_name)
-
-
-def parse_dataset(
-        dataframe: pl.DataFrame,
-        name: str,
-        description: str,
-        dataset_file_name: str
-) -> DataSet:
-    """ Maybe a method of dataset? """
-
-    series = []
-    times = []
-
-    for k, v in dataframe.schema.items():
-        if v.is_numeric():
-            series.append(k)
-        elif v.is_temporal():
-            times.append(k)
-
-    if len(times) == 0:
-        raise TsApiNoTimestampError("No timestamp columns found")
-
-    return DataSet(
-        id="abc",
-        name=name,
-        description=description,
-        num_series=len(series),
-        max_length=len(dataframe),
-        series_cols=series,
-        timestamp_cols=times,
-        file_name=dataset_file_name
-    )
+    return dataset
 
 
 def parse_timeseries_descriptor(descriptor: str):

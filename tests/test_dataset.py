@@ -3,7 +3,7 @@ from datetime import datetime
 import polars as pl
 import pytest
 
-from tsapi.model.dataset import parse_dataset, parse_timeseries_descriptor
+from tsapi.model.dataset import DataSet, rename_blank_columns, parse_timeseries_descriptor
 from tsapi.errors import TsApiNoTimestampError
 
 
@@ -19,6 +19,7 @@ def dataset_df():
             "series1": [1, 2, 3],
             "series2": [4.0, 5.0, 6.0],
             "series3": ["a", "b", "c"],
+            "": ["a", "b", "c"],
         }
     )
 
@@ -34,17 +35,25 @@ def dataset_df_no_time():
 
 
 def test_dataset_parse(dataset_df):
-    dset = parse_dataset(dataset_df, "test", "test description", "test.parquet")
+    dset = DataSet.from_dataframe(dataset_df, "test")
 
     assert len(dset.series_cols) == 2
     assert len(dset.timestamp_cols) == 1
+    assert len(dset.other_cols) == 2
     assert dset.num_series == 2
     assert dset.max_length == 3
+    assert dset.file_name == "test.parquet"
+
+
+def test_rename(dataset_df):
+    dataset_df = rename_blank_columns(dataset_df)
+
+    assert 'Unk:0' in dataset_df.columns
 
 
 def test_dataset_parse_no_time(dataset_df_no_time):
     with pytest.raises(TsApiNoTimestampError):
-        parse_dataset(dataset_df_no_time, "test", "test description", "test.parquet")
+        DataSet.from_dataframe(dataset_df_no_time, "test")
 
 
 def test_dataset_descriptor():

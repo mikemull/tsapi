@@ -178,6 +178,7 @@ async def get_op_time_series(
 
     dataset_data = await MongoClient(settings).get_dataset(opset.dataset_id)
     dataset = DataSet(**dataset_data)
+    logger.info("Loaded dataset", dataset=dataset, data_dir=settings.data_dir)
     df = dataset.load(settings.data_dir).slice(offset, limit)
     df_adj = adjust_frequency(df, dataset.tscol)
 
@@ -198,7 +199,7 @@ async def create_file(
 
     try:
         if upload_type == "add":
-            dataset = save_dataset(name, settings.data_dir, file)
+            dataset = save_dataset(name, settings.data_dir, file, logger)
         elif upload_type == "import":
             dataset = save_dataset_source(name, settings.data_dir, file)
         else:
