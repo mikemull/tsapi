@@ -25,11 +25,11 @@ spec:
     spec:
       containers:
       - name: "tsapi-1"
-        image: "us-west1-docker.pkg.dev/website-410522/tsnext/tsapi:latest"
+        image: "us-central1-docker.pkg.dev/website-410522/tsnext/tsapi:latest"
         imagePullPolicy: Always
         resources:
           requests:
-            memory: "64Mi"
+            memory: "256Mi"
             cpu: "250m"
           limits:
             memory: "512Mi"
