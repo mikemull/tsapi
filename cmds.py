@@ -7,13 +7,19 @@ from tsapi.model.dataset import DataSet
 from main import settings
 
 
+def get_datasets():
+    lup = asyncio.new_event_loop()
+    client = MongoClient(settings)
+    return lup.run_until_complete(client.get_datasets())
+
+
 def add_dataset(name, description, file_path):
     df = pl.read_parquet(file_path)
 
     dataset = DataSet.from_dataframe(df, name, description)
 
     lup = asyncio.new_event_loop()
-    client = MongoClient()
+    client = MongoClient(settings)
     lup.run_until_complete(client.insert_dataset(dataset.model_dump()))
 
 
