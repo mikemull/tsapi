@@ -62,5 +62,5 @@ spec:
           csi:
             driver: gcsfuse.csi.storage.gke.io
             volumeAttributes:
-              bucketName: tsapi_bucket
+              bucketName: tsnext_bucket
               mountOptions: "implicit-dirs"
