@@ -214,3 +214,14 @@ async def create_file(
         raise HTTPException(status_code=400, detail=str(e))
 
     return await MongoClient(settings).get_dataset(dataset_id)
+
+
+@app.post("/tsapi/v1/signed-url")
+async def create_signed_url(
+        file_name: str,
+        upload_type: Annotated[str, File()]
+) -> dict:
+    """
+    Create a signed URL for uploading a file to Google Cloud Storage.
+    """
+
