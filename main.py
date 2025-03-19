@@ -7,11 +7,13 @@ from fastapi.middleware.cors import CORSMiddleware
 from pydantic_settings import BaseSettings, SettingsConfigDict
 import structlog
 
+
+from tsapi.gcs import generate_signed_url
 from tsapi.model.dataset import (
     DataSet, OperationSet, parse_timeseries_descriptor, adjust_frequency, load_electricity_data,
-    save_dataset, save_dataset_source
+    save_dataset, save_dataset_source, DatasetRequest
 )
-
+from tsapi.model.responses import SignedURLResponse
 from tsapi.model.time_series import TimePoint, TimeSeries, TimeRecord
 from tsapi.mongo_client import MongoClient
 from tsapi.errors import TsApiNoTimestampError
@@ -218,10 +220,15 @@ async def create_file(
 
 @app.post("/tsapi/v1/signed-url")
 async def create_signed_url(
-        file_name: str,
-        upload_type: Annotated[str, File()]
-) -> dict:
+        dataset_req: DatasetRequest, config: Settings = Depends(get_settings)
+) -> SignedURLResponse:
     """
     Create a signed URL for uploading a file to Google Cloud Storage.
     """
+    signed_url = generate_signed_url(
+        bucket_name='tsnext_bucket',
+        blob_name=f'datasets/{dataset_req.name}',
+        expiration_minutes=5
+    )
 
+    return SignedURLResponse(url=signed_url)

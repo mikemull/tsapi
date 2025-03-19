@@ -12,6 +12,10 @@ from tsapi.errors import TsApiNoTimestampError
 MAX_POINTS = 10000  # TODO: make this a setting
 
 
+class DatasetRequest(BaseModel):
+    name: str
+
+
 class OperationSet(BaseModel):
     id: str
     dataset_id: str
