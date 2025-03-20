@@ -14,6 +14,7 @@ MAX_POINTS = 10000  # TODO: make this a setting
 
 class DatasetRequest(BaseModel):
     name: str
+    upload_type: str
 
 
 class OperationSet(BaseModel):
@@ -82,6 +83,12 @@ def rename_blank_columns(df: pl.DataFrame):
             iblank += 1
 
     return df
+
+
+def build_dataset(name: str, data_dir: str) -> DataSet:
+    df = pl.read_parquet((os.path.join(data_dir, f'{name}.parquet')))
+    df = rename_blank_columns(df)
+    return DataSet.from_dataframe(df, name)
 
 
 def save_dataset(name: str, data_dir: str, data: bytes, logger):

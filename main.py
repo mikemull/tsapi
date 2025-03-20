@@ -11,7 +11,7 @@ import structlog
 from tsapi.gcs import generate_signed_url
 from tsapi.model.dataset import (
     DataSet, OperationSet, parse_timeseries_descriptor, adjust_frequency, load_electricity_data,
-    save_dataset, save_dataset_source, DatasetRequest
+    save_dataset, save_dataset_source, DatasetRequest, build_dataset
 )
 from tsapi.model.responses import SignedURLResponse
 from tsapi.model.time_series import TimePoint, TimeSeries, TimeRecord
@@ -110,6 +110,30 @@ async def health():
 @app.get("/tsapi/v1/datasets")
 async def get_datasets(config: Settings = Depends(get_settings)) -> list[DataSet]:
     return await MongoClient(config).get_datasets()
+
+
+@app.post("/tsapi/v1/datasets")
+async def create_dataset(
+        dataset_req: DatasetRequest,
+        config: Settings = Depends(get_settings)
+) -> DataSet:
+    """
+    This creates a dataset, but it presumes that a file has already been uploaded
+    to GCS (see create_signed_url).  The file is then loaded into a DataSet object
+    :param dataset_req:
+    :param config:
+    :return:
+    """
+    if dataset_req.upload_type == 'add':
+        dataset = build_dataset(dataset_req.name, config.data_dir)
+        dataset_id = await MongoClient(config).insert_dataset(dataset.model_dump())
+        dataset.id = dataset_id
+    elif dataset_req.upload_type == 'import':
+        pass
+    else:
+        raise HTTPException(status_code=400, detail="Invalid upload type")
+
+    return dataset
 
 
 @app.get("/tsapi/v1/datasets/{dataset_id}")
@@ -227,7 +251,7 @@ async def create_signed_url(
     """
     signed_url = generate_signed_url(
         bucket_name='tsnext_bucket',
-        blob_name=f'datasets/{dataset_req.name}',
+        blob_name=f'datasets/{dataset_req.name}.parquet',
         expiration_minutes=5
     )
 
