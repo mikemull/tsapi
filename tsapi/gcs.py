@@ -22,6 +22,7 @@ def generate_signed_url(bucket_name, blob_name, expiration_minutes=15):
 
     # Generate a signed URL for the blob
     signed_url = blob.generate_signed_url(
+        version='v4',
         expiration=timedelta(minutes=expiration_minutes),
         method='PUT',
         content_type="application/octet-stream"
