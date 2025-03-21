@@ -207,7 +207,10 @@ async def get_op_time_series(
     dataset_data = await MongoClient(settings).get_dataset(opset.dataset_id)
     dataset = DataSet(**dataset_data)
     logger.info("Loaded dataset", dataset=dataset.name, data_dir=settings.data_dir)
-    df = dataset.load(settings.data_dir).slice(offset, limit)
+    df = dataset.load(settings.data_dir)
+    logger.info('Loaded dataframe', rows=len(df))
+    df = df.slice(offset, limit)
+    logger.info("Sliced dataframe", rows=len(df))
     df_adj = adjust_frequency(df, dataset.tscol)
 
     logger.info("Adjusted frequency")
