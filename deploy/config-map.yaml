@@ -5,6 +5,7 @@ metadata:
 data:
   DATA_DIR: /tsdata/datasets/
   SECRETS_DIR: /var/secrets
+  GOOGLE_APPLICATION_CREDENTIALS: /var/secrets/service_account_creds
   MDB_HOST: tsapicluster0.2lkfb.mongodb.net
   MDB_NAME: tsapidb
   MDB_SCHEME: mongodb+srv
