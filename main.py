@@ -202,15 +202,21 @@ async def get_op_time_series(
     opset = await MongoClient(config).get_opset(opset_id)
     opset = OperationSet(**opset)
 
+    logger.info('Retrieved opset')
+
     dataset_data = await MongoClient(settings).get_dataset(opset.dataset_id)
     dataset = DataSet(**dataset_data)
-    logger.info("Loaded dataset", dataset=dataset, data_dir=settings.data_dir)
+    logger.info("Loaded dataset", dataset=dataset.name, data_dir=settings.data_dir)
     df = dataset.load(settings.data_dir).slice(offset, limit)
     df_adj = adjust_frequency(df, dataset.tscol)
+
+    logger.info("Adjusted frequency")
 
     tsdata = []
     for x in df_adj.iter_rows(named=True):
         tsdata.append(TimeRecord(timestamp=x[dataset.tscol], data={k: x[k] for k in opset.plot}))
+
+    logger.info("Created time series data")
 
     return TimeSeries(id=opset_id, name="electricity", data=tsdata)
 
