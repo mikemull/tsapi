@@ -14,6 +14,7 @@ from tsapi.model.dataset import (
 
 from tsapi.model.time_series import TimePoint, TimeSeries, TimeRecord
 from tsapi.mongo_client import MongoClient
+from tsapi.dataset_cache import DatasetCache
 from tsapi.errors import TsApiNoTimestampError
 
 
@@ -29,6 +30,8 @@ class Settings(BaseSettings):
     mdb_name: str = "tsapidb"
     mdb_scheme: str = "mongodb"
     mdb_options: str = ""
+
+    redis_host: str = "localhost"
 
     model_config = SettingsConfigDict(env_file=".env")
 
@@ -176,9 +179,17 @@ async def get_op_time_series(
     opset = await MongoClient(config).get_opset(opset_id)
     opset = OperationSet(**opset)
 
-    dataset_data = await MongoClient(settings).get_dataset(opset.dataset_id)
-    dataset = DataSet(**dataset_data)
+    dscache = DatasetCache(config)
+
+    # Check if the dataset is cached
+    cached_df = await dscache.get_cached_dataset(opset.dataset_id)
+    if cached_df is None:
+        dataset_data = await MongoClient(settings).get_dataset(opset.dataset_id)
+        dataset = DataSet(**dataset_data)
+
     logger.info("Loaded dataset", dataset=dataset, data_dir=settings.data_dir)
+
+
     df = dataset.load(settings.data_dir).slice(offset, limit)
     df_adj = adjust_frequency(df, dataset.tscol)
 

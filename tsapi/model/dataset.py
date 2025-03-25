@@ -16,6 +16,8 @@ class OperationSet(BaseModel):
     id: str
     dataset_id: str
     plot: list[str] = []
+    offset: int = 0
+    limit: int = 1000
     dependent: Optional[str] = None
 
 
