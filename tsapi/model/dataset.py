@@ -106,6 +106,19 @@ def import_dataset(name: str, data_dir: str) -> DataSet:
     return DataSet.from_dataframe(df, name)
 
 
+def store_dataset(name: str, data_dir: str, data: bytes, upload_type: str, logger):
+    try:
+        if upload_type == 'add':
+            df = pl.read_parquet(io.BytesIO(data))
+            df.write_parquet(os.path.join(data_dir, f'{name}.parquet'))
+        else:
+            df = pl.read_csv(io.BytesIO(data))
+            df.write_csv(os.path.join(data_dir, f'{name}.csv'))
+    except Exception as e:
+        logger.error(f"Error reading data: {e}")
+        raise e
+
+
 def save_dataset(name: str, data_dir: str, data: bytes, logger):
     try:
         df_parquet = pl.read_parquet(io.BytesIO(data))

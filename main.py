@@ -1,8 +1,8 @@
 from typing import Annotated, Any
 
 import environ
-from fastapi import FastAPI, File, HTTPException, Depends
-from fastapi.responses import PlainTextResponse
+from fastapi import FastAPI, File, HTTPException, Depends, Query, Request
+from fastapi.responses import PlainTextResponse, JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic_settings import BaseSettings, SettingsConfigDict
 import structlog
@@ -11,7 +11,7 @@ import structlog
 from tsapi.gcs import generate_signed_url
 from tsapi.model.dataset import (
     DataSet, OperationSet, parse_timeseries_descriptor, adjust_frequency, load_electricity_data,
-    save_dataset, save_dataset_source, DatasetRequest, build_dataset, import_dataset
+    save_dataset, save_dataset_source, DatasetRequest, build_dataset, import_dataset, store_dataset
 )
 from tsapi.model.responses import SignedURLResponse
 from tsapi.model.time_series import TimePoint, TimeSeries, TimeRecord
@@ -21,6 +21,7 @@ from tsapi.errors import TsApiNoTimestampError
 
 
 class Settings(BaseSettings):
+    env: str = "local"
     app_name: str = "Time Series API"
     data_dir: str
     secrets_dir: str = "/var/secrets"
@@ -269,6 +270,18 @@ async def create_file(
     return await MongoClient(settings).get_dataset(dataset_id)
 
 
+@app.put("/tsapi/v1/upload")
+async def store_file(
+        request: Request,
+        name: str = Query(...),
+        upload_type: str = Query(...)
+) -> DataSet:
+    data = await request.body()
+    store_dataset(name, settings.data_dir, data, upload_type, logger)
+
+    return JSONResponse(content={"message": "File stored successfully"})
+
+
 @app.post("/tsapi/v1/signed-url")
 async def create_signed_url(
         dataset_req: DatasetRequest, config: Settings = Depends(get_settings)
@@ -276,10 +289,18 @@ async def create_signed_url(
     """
     Create a signed URL for uploading a file to Google Cloud Storage.
     """
-    signed_url = generate_signed_url(
-        bucket_name='tsnext_bucket',
-        blob_name=f'datasets/{dataset_req.name}.parquet',
-        expiration_minutes=5
-    )
+    file_type = 'parquet' if dataset_req.upload_type == 'add' else 'csv'
 
-    return SignedURLResponse(url=signed_url)
+    if settings.env != 'local':
+        signed_url = generate_signed_url(
+            bucket_name='tsnext_bucket',
+            blob_name=f'datasets/{dataset_req.name}.{file_type}',
+            expiration_minutes=5
+        )
+
+        return SignedURLResponse(url=signed_url)
+    else:
+        # In local mode, we just return a dummy URL
+        return SignedURLResponse(
+            url=f'http://localhost:8000/tsapi/v1/upload?name={dataset_req.name}&upload_type={dataset_req.upload_type}'
+        )

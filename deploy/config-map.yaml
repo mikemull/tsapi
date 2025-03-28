@@ -3,6 +3,7 @@ kind: ConfigMap
 metadata:
   name: tsapi-config
 data:
+  ENV: dev
   DATA_DIR: /tsdata/datasets/
   SECRETS_DIR: /var/secrets
   GOOGLE_APPLICATION_CREDENTIALS: /var/secrets/service_account_creds
