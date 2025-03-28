@@ -89,7 +89,20 @@ def rename_blank_columns(df: pl.DataFrame):
 
 def build_dataset(name: str, data_dir: str) -> DataSet:
     df = pl.read_parquet((os.path.join(data_dir, f'{name}.parquet')))
+    return DataSet.from_dataframe(df, name)
+
+
+def import_dataset(name: str, data_dir: str) -> DataSet:
+    """
+    Import a dataset from a CSV file and convert it to parquet format.
+    This function will also rename any blank columns in the dataframe.
+    """
+    source_file_name = os.path.join(data_dir, f'{name}.csv')
+    df = pl.read_csv(source_file_name, has_header=True, try_parse_dates=True)
     df = rename_blank_columns(df)
+
+    df.write_parquet(os.path.join(data_dir, f'{name}.parquet'))
+
     return DataSet.from_dataframe(df, name)
 
 

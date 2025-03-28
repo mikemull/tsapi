@@ -11,7 +11,7 @@ import structlog
 from tsapi.gcs import generate_signed_url
 from tsapi.model.dataset import (
     DataSet, OperationSet, parse_timeseries_descriptor, adjust_frequency, load_electricity_data,
-    save_dataset, save_dataset_source, DatasetRequest, build_dataset
+    save_dataset, save_dataset_source, DatasetRequest, build_dataset, import_dataset
 )
 from tsapi.model.responses import SignedURLResponse
 from tsapi.model.time_series import TimePoint, TimeSeries, TimeRecord
@@ -129,12 +129,13 @@ async def create_dataset(
     """
     if dataset_req.upload_type == 'add':
         dataset = build_dataset(dataset_req.name, config.data_dir)
-        dataset_id = await MongoClient(config).insert_dataset(dataset.model_dump())
-        dataset.id = dataset_id
     elif dataset_req.upload_type == 'import':
-        pass
+        dataset = import_dataset(dataset_req.name, config.data_dir)
     else:
         raise HTTPException(status_code=400, detail="Invalid upload type")
+
+    dataset_id = await MongoClient(config).insert_dataset(dataset.model_dump())
+    dataset.id = dataset_id
 
     return dataset
 
