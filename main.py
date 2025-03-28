@@ -163,7 +163,7 @@ async def update_opset(opset_id: str, opset: OperationSet) -> OperationSet:
         raise HTTPException(status_code=404, detail="Opset not found")
     if curr_opset['limit'] != opset['limit'] or curr_opset['offset'] != opset['offset']:
         # If the limit or offset has changed, we need to clear the dataset cache
-        dscache = DatasetCache(settings)
+        dscache = DatasetCache(settings, logger)
         await dscache.client.delete(curr_opset['dataset_id'])
     return opset
 
@@ -217,7 +217,7 @@ async def get_op_time_series(
     dataset_data = await MongoClient(settings).get_dataset(opset.dataset_id)
     dataset = DataSet(**dataset_data)
 
-    dscache = DatasetCache(config)
+    dscache = DatasetCache(config, logger)
 
     # Check if the dataset is cached
     dataset_df = await dscache.get_cached_dataset(opset.dataset_id)
