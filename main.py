@@ -174,7 +174,7 @@ async def update_opset(opset_id: str, opset: OperationSet) -> OperationSet:
                                                   opset['offset'], opset['limit'])
             # Take a sub-slice so that we don't have to reload from cloud storage
             new_df = dataset_df.slice(sub_offset, sub_limit)
-            await dscache.cache_dataset(opset.dataset_id, new_df)
+            await dscache.cache_dataset(opset['dataset_id'], new_df)
         except ValueError:
             await dscache.client.delete(curr_opset['dataset_id'])
 
