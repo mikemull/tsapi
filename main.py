@@ -166,12 +166,12 @@ async def update_opset(opset_id: str, opset: OperationSet) -> OperationSet:
     # Need to check new offset and limits against cached dataset.  If the new
     # range is outside of the cached range, we need to clear the cache.
     dscache = DatasetCache(settings, logger)
-    dataset_df = await dscache.get_cached_dataset(opset.dataset_id)
+    dataset_df = await dscache.get_cached_dataset(opset['dataset_id'])
 
     if dataset_df:
         try:
             sub_offset, sub_limit = get_new_slice(curr_opset['offset'], curr_opset['limit'],
-                                                  opset.offset, opset.limit)
+                                                  opset['offset'], opset['limit'])
             # Take a sub-slice so that we don't have to reload from cloud storage
             new_df = dataset_df.slice(sub_offset, sub_limit)
             await dscache.cache_dataset(opset.dataset_id, new_df)
