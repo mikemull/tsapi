@@ -11,7 +11,8 @@ import structlog
 from tsapi.gcs import generate_signed_url
 from tsapi.model.dataset import (
     DataSet, OperationSet, parse_timeseries_descriptor, adjust_frequency, load_electricity_data,
-    save_dataset, save_dataset_source, DatasetRequest, build_dataset, import_dataset, store_dataset
+    save_dataset, save_dataset_source, DatasetRequest, build_dataset, import_dataset, store_dataset,
+    get_new_slice
 )
 from tsapi.model.responses import SignedURLResponse
 from tsapi.model.time_series import TimePoint, TimeSeries, TimeRecord
@@ -161,10 +162,22 @@ async def update_opset(opset_id: str, opset: OperationSet) -> OperationSet:
     opset = await mngo_client.update_opset(opset_id, opset.model_dump())
     if opset is None:
         raise HTTPException(status_code=404, detail="Opset not found")
-    if curr_opset['limit'] != opset['limit'] or curr_opset['offset'] != opset['offset']:
-        # If the limit or offset has changed, we need to clear the dataset cache
-        dscache = DatasetCache(settings, logger)
-        await dscache.client.delete(curr_opset['dataset_id'])
+
+    # Need to check new offset and limits against cached dataset.  If the new
+    # range is outside of the cached range, we need to clear the cache.
+    dscache = DatasetCache(settings, logger)
+    dataset_df = await dscache.get_cached_dataset(opset.dataset_id)
+
+    if dataset_df:
+        try:
+            sub_offset, sub_limit = get_new_slice(curr_opset['offset'], curr_opset['limit'],
+                                                  opset.offset, opset.limit)
+            # Take a sub-slice so that we don't have to reload from cloud storage
+            new_df = dataset_df.slice(sub_offset, sub_limit)
+            await dscache.cache_dataset(opset.dataset_id, new_df)
+        except ValueError:
+            await dscache.client.delete(curr_opset['dataset_id'])
+
     return opset
 
 
