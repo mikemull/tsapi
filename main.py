@@ -168,7 +168,7 @@ async def update_opset(opset_id: str, opset: OperationSet) -> OperationSet:
     dscache = DatasetCache(settings, logger)
     dataset_df = await dscache.get_cached_dataset(opset['dataset_id'])
 
-    if dataset_df:
+    if dataset_df is not None:
         try:
             sub_offset, sub_limit = get_new_slice(curr_opset['offset'], curr_opset['limit'],
                                                   opset['offset'], opset['limit'])
