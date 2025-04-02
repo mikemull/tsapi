@@ -166,7 +166,7 @@ async def update_opset(opset_id: str, opset: OperationSet) -> OperationSet:
     # Need to check new offset and limits against cached dataset.  If the new
     # range is outside of the cached range, we need to clear the cache.
     dscache = DatasetCache(settings, logger)
-    dataset_df = await dscache.get_cached_dataset(opset['dataset_id'])
+    dataset_df = await dscache.get_cached_dataset(opset['id'])
 
     if dataset_df is not None:
         try:
@@ -174,9 +174,9 @@ async def update_opset(opset_id: str, opset: OperationSet) -> OperationSet:
                                                   opset['offset'], opset['limit'])
             # Take a sub-slice so that we don't have to reload from cloud storage
             new_df = dataset_df.slice(sub_offset, sub_limit)
-            await dscache.cache_dataset(opset['dataset_id'], new_df)
+            await dscache.cache_dataset(opset['id'], new_df)
         except ValueError:
-            await dscache.client.delete(curr_opset['dataset_id'])
+            await dscache.client.delete(curr_opset['id'])
 
     return opset
 
@@ -232,18 +232,24 @@ async def get_op_time_series(
 
     dscache = DatasetCache(config, logger)
 
-    # Check if the dataset is cached
-    dataset_df = await dscache.get_cached_dataset(opset.dataset_id)
+    # Check if there's already a dataset for this opset
+    dataset_df = await dscache.get_cached_dataset(opset.id)
 
     if dataset_df is None:
-        logger.info("Loaded dataset", dataset=dataset, data_dir=settings.data_dir)
-        dataset_df = dataset.load(settings.data_dir)
-        logger.info('Loaded dataframe', rows=len(dataset_df))
+        dataset_df = await dscache.get_cached_dataset(opset.dataset_id)
+        if dataset_df is None:
+            # Load the dataset from the source
+            logger.info("Loading dataset from source")
+            dataset = DataSet(**dataset_data)
+            dataset_df = dataset.load(settings.data_dir)
+            logger.info('Loaded dataframe', rows=len(dataset_df))
+            await dscache.cache_dataset(opset.dataset_id, dataset_df)
+
         dataset_df = dataset_df.slice(opset.offset, opset.limit)
         logger.info("Sliced dataframe", rows=len(dataset_df))
         dataset_df = adjust_frequency(dataset_df, dataset.tscol)
         logger.info("Adjusted frequency")
-        await dscache.cache_dataset(opset.dataset_id, dataset_df)
+        await dscache.cache_dataset(opset.id, dataset_df)
     else:
         logger.info("Using cached dataset", rows=len(dataset_df))
 
