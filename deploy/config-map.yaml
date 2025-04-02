@@ -3,6 +3,7 @@ kind: ConfigMap
 metadata:
   name: tsapi-config
 data:
+  ENV: dev
   DATA_DIR: /tsdata/datasets/
   SECRETS_DIR: /var/secrets
   GOOGLE_APPLICATION_CREDENTIALS: /var/secrets/service_account_creds
@@ -11,3 +12,4 @@ data:
   MDB_SCHEME: mongodb+srv
   MDB_OPTIONS: retryWrites=true&w=majority&appName=TSAPICluster0
   VITE_TSAPI_URL: http://tsapi-service.tsnext.svc.cluster.local:1729
+  REDIS_HOST: 10.85.216.163

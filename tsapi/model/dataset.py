@@ -21,6 +21,8 @@ class OperationSet(BaseModel):
     id: str
     dataset_id: str
     plot: list[str] = []
+    offset: int = 0
+    limit: int = 1000
     dependent: Optional[str] = None
 
 
@@ -87,8 +89,34 @@ def rename_blank_columns(df: pl.DataFrame):
 
 def build_dataset(name: str, data_dir: str) -> DataSet:
     df = pl.read_parquet((os.path.join(data_dir, f'{name}.parquet')))
-    df = rename_blank_columns(df)
     return DataSet.from_dataframe(df, name)
+
+
+def import_dataset(name: str, data_dir: str) -> DataSet:
+    """
+    Import a dataset from a CSV file and convert it to parquet format.
+    This function will also rename any blank columns in the dataframe.
+    """
+    source_file_name = os.path.join(data_dir, f'{name}.csv')
+    df = pl.read_csv(source_file_name, has_header=True, try_parse_dates=True)
+    df = rename_blank_columns(df)
+
+    df.write_parquet(os.path.join(data_dir, f'{name}.parquet'))
+
+    return DataSet.from_dataframe(df, name)
+
+
+def store_dataset(name: str, data_dir: str, data: bytes, upload_type: str, logger):
+    try:
+        if upload_type == 'add':
+            df = pl.read_parquet(io.BytesIO(data))
+            df.write_parquet(os.path.join(data_dir, f'{name}.parquet'))
+        else:
+            df = pl.read_csv(io.BytesIO(data))
+            df.write_csv(os.path.join(data_dir, f'{name}.csv'))
+    except Exception as e:
+        logger.error(f"Error reading data: {e}")
+        raise e
 
 
 def save_dataset(name: str, data_dir: str, data: bytes, logger):
@@ -181,3 +209,16 @@ def load_electricity_data_source(data_dir) -> pl.DataFrame:
         try_parse_dates=True)
 
     return df
+
+
+def get_new_slice(prior_offset: int, prior_limit: int, new_offset: int, new_limit: int) -> tuple[int, int]:
+    prior_end = prior_offset + prior_limit
+    new_end = new_offset + new_limit
+
+    if prior_offset <= new_offset and new_end <= prior_end:
+        relative_offset = new_offset - prior_offset
+        return relative_offset, new_limit
+    else:
+        raise ValueError("The new range is not a subset of the prior range")
+
+

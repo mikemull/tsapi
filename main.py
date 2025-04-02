@@ -1,8 +1,8 @@
 from typing import Annotated, Any
 
 import environ
-from fastapi import FastAPI, File, HTTPException, Depends
-from fastapi.responses import PlainTextResponse
+from fastapi import FastAPI, File, HTTPException, Depends, Query, Request
+from fastapi.responses import PlainTextResponse, JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic_settings import BaseSettings, SettingsConfigDict
 import structlog
@@ -11,15 +11,18 @@ import structlog
 from tsapi.gcs import generate_signed_url
 from tsapi.model.dataset import (
     DataSet, OperationSet, parse_timeseries_descriptor, adjust_frequency, load_electricity_data,
-    save_dataset, save_dataset_source, DatasetRequest, build_dataset
+    save_dataset, save_dataset_source, DatasetRequest, build_dataset, import_dataset, store_dataset,
+    get_new_slice
 )
 from tsapi.model.responses import SignedURLResponse
 from tsapi.model.time_series import TimePoint, TimeSeries, TimeRecord
 from tsapi.mongo_client import MongoClient
+from tsapi.dataset_cache import DatasetCache
 from tsapi.errors import TsApiNoTimestampError
 
 
 class Settings(BaseSettings):
+    env: str = "local"
     app_name: str = "Time Series API"
     data_dir: str
     secrets_dir: str = "/var/secrets"
@@ -31,6 +34,8 @@ class Settings(BaseSettings):
     mdb_name: str = "tsapidb"
     mdb_scheme: str = "mongodb"
     mdb_options: str = ""
+
+    redis_host: str = "localhost"
 
     model_config = SettingsConfigDict(env_file=".env")
 
@@ -126,12 +131,13 @@ async def create_dataset(
     """
     if dataset_req.upload_type == 'add':
         dataset = build_dataset(dataset_req.name, config.data_dir)
-        dataset_id = await MongoClient(config).insert_dataset(dataset.model_dump())
-        dataset.id = dataset_id
     elif dataset_req.upload_type == 'import':
-        pass
+        dataset = import_dataset(dataset_req.name, config.data_dir)
     else:
         raise HTTPException(status_code=400, detail="Invalid upload type")
+
+    dataset_id = await MongoClient(config).insert_dataset(dataset.model_dump())
+    dataset.id = dataset_id
 
     return dataset
 
@@ -150,9 +156,28 @@ async def create_opset(opset: OperationSet, config: Settings = Depends(get_setti
 
 @app.put("/tsapi/v1/opsets/{opset_id}")
 async def update_opset(opset_id: str, opset: OperationSet) -> OperationSet:
-    opset = await MongoClient(settings).update_opset(opset_id, opset.model_dump())
+    mngo_client = MongoClient(settings)
+
+    curr_opset = await mngo_client.get_opset(opset_id)
+    opset = await mngo_client.update_opset(opset_id, opset.model_dump())
     if opset is None:
         raise HTTPException(status_code=404, detail="Opset not found")
+
+    # Need to check new offset and limits against cached dataset.  If the new
+    # range is outside of the cached range, we need to clear the cache.
+    dscache = DatasetCache(settings, logger)
+    dataset_df = await dscache.get_cached_dataset(opset['id'])
+
+    if dataset_df is not None:
+        try:
+            sub_offset, sub_limit = get_new_slice(curr_opset['offset'], curr_opset['limit'],
+                                                  opset['offset'], opset['limit'])
+            # Take a sub-slice so that we don't have to reload from cloud storage
+            new_df = dataset_df.slice(sub_offset, sub_limit)
+            await dscache.cache_dataset(opset['id'], new_df)
+        except ValueError:
+            await dscache.client.delete(curr_opset['id'])
+
     return opset
 
 
@@ -195,28 +220,41 @@ async def get_multiple_time_series(series_ids: str, offset: int = 0, limit: int 
 
 @app.get("/tsapi/v1/tsop/{opset_id}")
 async def get_op_time_series(
-        opset_id: str, offset: int = 0, limit: int = 100, config: Settings = Depends(get_settings)
+        opset_id: str, config: Settings = Depends(get_settings)
 ) -> TimeSeries:
-    logger.info("Get time series", opset_id=opset_id, offset=offset, limit=limit)
+    logger.info("Get time series", opset_id=opset_id)
 
     opset = await MongoClient(config).get_opset(opset_id)
     opset = OperationSet(**opset)
-
-    logger.info('Retrieved opset')
-
+    logger.info('Retrieved opset', opset=opset)
     dataset_data = await MongoClient(settings).get_dataset(opset.dataset_id)
     dataset = DataSet(**dataset_data)
-    logger.info("Loaded dataset", dataset=dataset.name, data_dir=settings.data_dir)
-    df = dataset.load(settings.data_dir)
-    logger.info('Loaded dataframe', rows=len(df))
-    df = df.slice(offset, limit)
-    logger.info("Sliced dataframe", rows=len(df))
-    df_adj = adjust_frequency(df, dataset.tscol)
 
-    logger.info("Adjusted frequency")
+    dscache = DatasetCache(config, logger)
+
+    # Check if there's already a dataset for this opset
+    dataset_df = await dscache.get_cached_dataset(opset.id)
+
+    if dataset_df is None:
+        dataset_df = await dscache.get_cached_dataset(opset.dataset_id)
+        if dataset_df is None:
+            # Load the dataset from the source
+            logger.info("Loading dataset from source")
+            dataset = DataSet(**dataset_data)
+            dataset_df = dataset.load(settings.data_dir)
+            logger.info('Loaded dataframe', rows=len(dataset_df))
+            await dscache.cache_dataset(opset.dataset_id, dataset_df)
+
+        dataset_df = dataset_df.slice(opset.offset, opset.limit)
+        logger.info("Sliced dataframe", rows=len(dataset_df))
+        dataset_df = adjust_frequency(dataset_df, dataset.tscol)
+        logger.info("Adjusted frequency")
+        await dscache.cache_dataset(opset.id, dataset_df)
+    else:
+        logger.info("Using cached dataset", rows=len(dataset_df))
 
     tsdata = []
-    for x in df_adj.iter_rows(named=True):
+    for x in dataset_df.iter_rows(named=True):
         tsdata.append(TimeRecord(timestamp=x[dataset.tscol], data={k: x[k] for k in opset.plot}))
 
     logger.info("Created time series data")
@@ -251,6 +289,18 @@ async def create_file(
     return await MongoClient(settings).get_dataset(dataset_id)
 
 
+@app.put("/tsapi/v1/upload")
+async def store_file(
+        request: Request,
+        name: str = Query(...),
+        upload_type: str = Query(...)
+) -> DataSet:
+    data = await request.body()
+    store_dataset(name, settings.data_dir, data, upload_type, logger)
+
+    return JSONResponse(content={"message": "File stored successfully"})
+
+
 @app.post("/tsapi/v1/signed-url")
 async def create_signed_url(
         dataset_req: DatasetRequest, config: Settings = Depends(get_settings)
@@ -258,10 +308,18 @@ async def create_signed_url(
     """
     Create a signed URL for uploading a file to Google Cloud Storage.
     """
-    signed_url = generate_signed_url(
-        bucket_name='tsnext_bucket',
-        blob_name=f'datasets/{dataset_req.name}.parquet',
-        expiration_minutes=5
-    )
+    file_type = 'parquet' if dataset_req.upload_type == 'add' else 'csv'
 
-    return SignedURLResponse(url=signed_url)
+    if settings.env != 'local':
+        signed_url = generate_signed_url(
+            bucket_name='tsnext_bucket',
+            blob_name=f'datasets/{dataset_req.name}.{file_type}',
+            expiration_minutes=5
+        )
+
+        return SignedURLResponse(url=signed_url)
+    else:
+        # In local mode, we just return a dummy URL
+        return SignedURLResponse(
+            url=f'http://localhost:8000/tsapi/v1/upload?name={dataset_req.name}&upload_type={dataset_req.upload_type}'
+        )
