@@ -1,3 +1,4 @@
+import asyncio
 import io
 import os
 import math
@@ -222,3 +223,13 @@ def get_new_slice(prior_offset: int, prior_limit: int, new_offset: int, new_limi
         raise ValueError("The new range is not a subset of the prior range")
 
 
+async def delete_dataset_from_storage(dataset: DataSet, data_dir: str, logger):
+    """
+    Delete a dataset from storage
+    """
+    try:
+        file_path = os.path.join(data_dir, f'{dataset.name}.parquet')
+        await asyncio.to_thread(os.remove, file_path)
+        logger.info(f"File '{file_path}' deleted successfully.")
+    except FileNotFoundError:
+        logger.info(f"Error: File '{file_path}' not found.")

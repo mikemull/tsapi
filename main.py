@@ -1,8 +1,8 @@
 from typing import Annotated, Any
 
 import environ
-from fastapi import FastAPI, File, HTTPException, Depends, Query, Request
-from fastapi.responses import PlainTextResponse, JSONResponse
+from fastapi import FastAPI, File, HTTPException, Depends, Query, Request, status
+from fastapi.responses import Response, PlainTextResponse, JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic_settings import BaseSettings, SettingsConfigDict
 import structlog
@@ -12,7 +12,7 @@ from tsapi.gcs import generate_signed_url
 from tsapi.model.dataset import (
     DataSet, OperationSet, parse_timeseries_descriptor, adjust_frequency, load_electricity_data,
     save_dataset, save_dataset_source, DatasetRequest, build_dataset, import_dataset, store_dataset,
-    get_new_slice
+    get_new_slice, delete_dataset_from_storage
 )
 from tsapi.model.responses import SignedURLResponse
 from tsapi.model.time_series import TimePoint, TimeSeries, TimeRecord
@@ -147,6 +147,15 @@ async def get_dataset(dataset_id: str, config: Settings = Depends(get_settings))
     return await MongoClient(config).get_dataset(dataset_id)
 
 
+@app.delete("/tsapi/v1/datasets/{dataset_id}")
+async def delete_dataset(dataset_id: str, config: Settings = Depends(get_settings)) -> DataSet:
+    mngo_client = MongoClient(settings)
+    dataset = DataSet.model_validate(await mngo_client.get_dataset(dataset_id))
+    await mngo_client.delete_dataset(dataset_id)
+    await delete_dataset_from_storage(dataset, config.data_dir, logger)
+    return Response(status_code=status.HTTP_204_NO_CONTENT)
+
+
 @app.post("/tsapi/v1/opsets")
 async def create_opset(opset: OperationSet, config: Settings = Depends(get_settings)):
     opset_id = await MongoClient(config).insert_opset(opset.model_dump())
@@ -247,11 +256,13 @@ async def get_op_time_series(
 
         dataset_df = dataset_df.slice(opset.offset, opset.limit)
         logger.info("Sliced dataframe", rows=len(dataset_df))
-        dataset_df = adjust_frequency(dataset_df, dataset.tscol)
-        logger.info("Adjusted frequency")
         await dscache.cache_dataset(opset.id, dataset_df)
     else:
         logger.info("Using cached dataset", rows=len(dataset_df))
+
+    # We have to do downsampling here because it changes the number of rows
+    dataset_df = adjust_frequency(dataset_df, dataset.tscol)
+    logger.info("Adjusted frequency")
 
     tsdata = []
     for x in dataset_df.iter_rows(named=True):
