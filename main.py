@@ -15,9 +15,11 @@ from tsapi.model.dataset import (
     get_new_slice, delete_dataset_from_storage
 )
 from tsapi.model.responses import SignedURLResponse
+from tsapi.model.forecast import ForecastResponse, ForecastRequest
 from tsapi.model.time_series import TimePoint, TimeSeries, TimeRecord
 from tsapi.mongo_client import MongoClient
 from tsapi.dataset_cache import DatasetCache
+from tsapi.forecast import forecast
 from tsapi.errors import TsApiNoTimestampError
 
 
@@ -271,6 +273,46 @@ async def get_op_time_series(
     logger.info("Created time series data")
 
     return TimeSeries(id=opset_id, name="electricity", data=tsdata)
+
+
+@app.post("/tsapi/v1/forecast")
+async def create_forecast(
+        forecast_req: ForecastRequest,
+        config: Settings = Depends(get_settings)) -> ForecastResponse:
+
+    opset = await MongoClient(config).get_opset(forecast_req.opset_id)
+    opset = OperationSet(**opset)
+    logger.info('Retrieved opset', opset=opset)
+    dataset_data = await MongoClient(settings).get_dataset(opset.dataset_id)
+    dataset = DataSet(**dataset_data)
+
+    dscache = DatasetCache(config, logger)
+    # Check if there's already a dataset for this opset
+    dataset_df = await dscache.get_cached_dataset(opset.id)
+
+    if dataset_df is None:
+        dataset_df = await dscache.get_cached_dataset(opset.dataset_id)
+        if dataset_df is None:
+            # Load the dataset from the source
+            logger.info("Loading dataset from source")
+            dataset = DataSet(**dataset_data)
+            dataset_df = dataset.load(settings.data_dir)
+            logger.info('Loaded dataframe', rows=len(dataset_df))
+            await dscache.cache_dataset(opset.dataset_id, dataset_df)
+
+        dataset_df = dataset_df.slice(opset.offset, opset.limit)
+        logger.info("Sliced dataframe", rows=len(dataset_df))
+        await dscache.cache_dataset(opset.id, dataset_df)
+    else:
+        logger.info("Using cached dataset", rows=len(dataset_df))
+
+    forecast_result = forecast(
+        dataset_df[forecast_req.series_id],
+        dataset_df[dataset.tscol],
+        horizon=forecast_req.horizon)
+    return ForecastResponse(
+        forecast=[TimeRecord(timestamp=t, data=data) for t, data in forecast_result],
+    )
 
 
 @app.post("/tsapi/v1/files")

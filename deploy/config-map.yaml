@@ -12,4 +12,4 @@ data:
   MDB_SCHEME: mongodb+srv
   MDB_OPTIONS: retryWrites=true&w=majority&appName=TSAPICluster0
   VITE_TSAPI_URL: http://tsapi-service.tsnext.svc.cluster.local:1729
-  REDIS_HOST: 10.85.216.163
+  REDIS_HOST: 10.230.231.155
