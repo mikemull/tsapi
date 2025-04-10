@@ -63,4 +63,4 @@ spec:
             driver: gcsfuse.csi.storage.gke.io
             volumeAttributes:
               bucketName: tsnext_bucket
-              mountOptions: "implicit-dirs"
+              mountOptions: "implicit-dirs,file-cache:max-size-mb:500"

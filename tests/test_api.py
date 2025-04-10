@@ -40,3 +40,11 @@ def test_insert_opset():
         response = client.post("/tsapi/v1/opsets", json=opset.model_dump())
         assert response.status_code == 200
         assert response.json()['dataset_id'] == opset.dataset_id
+
+
+# def test_forecast():
+#     with TestClient(app) as client:
+#         app.dependency_overrides[get_settings] = override_get_settings
+#         response = client.get("/tsapi/v1/forecast")
+#         assert response.status_code == 200
+#         assert response.json() == {"message": "Forecasting endpoint"}
