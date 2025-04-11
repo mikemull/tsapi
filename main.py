@@ -12,7 +12,7 @@ from tsapi.gcs import generate_signed_url
 from tsapi.model.dataset import (
     DataSet, OperationSet, parse_timeseries_descriptor, adjust_frequency, load_electricity_data,
     save_dataset, save_dataset_source, DatasetRequest, build_dataset, import_dataset, store_dataset,
-    get_new_slice, delete_dataset_from_storage
+    delete_dataset_from_storage
 )
 from tsapi.model.responses import SignedURLResponse
 from tsapi.model.forecast import ForecastResponse, ForecastRequest
@@ -178,18 +178,8 @@ async def update_opset(opset_id: str, opset: OperationSet) -> OperationSet:
 
     # Need to check new offset and limits against cached dataset.  If the new
     # range is outside of the cached range, we need to clear the cache.
-    dscache = DatasetCache(DataSet(**dataset_data), settings, logger)
-    dataset_df = await dscache.get_cached_dataset(opset['id'])
-
-    if dataset_df is not None:
-        try:
-            sub_offset, sub_limit = get_new_slice(curr_opset['offset'], curr_opset['limit'],
-                                                  opset['offset'], opset['limit'])
-            # Take a sub-slice so that we don't have to reload from cloud storage
-            new_df = dataset_df.slice(sub_offset, sub_limit)
-            await dscache.cache_dataset(opset['id'], new_df)
-        except ValueError:
-            await dscache.client.delete(curr_opset['id'])
+    ds_cache = DatasetCache(DataSet(**dataset_data), settings, logger)
+    await ds_cache.update_operation_set(OperationSet(**opset), OperationSet(**curr_opset))
 
     return opset
 

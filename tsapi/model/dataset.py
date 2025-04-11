@@ -219,17 +219,6 @@ def load_electricity_data_source(data_dir) -> pl.DataFrame:
     return df
 
 
-def get_new_slice(prior_offset: int, prior_limit: int, new_offset: int, new_limit: int) -> tuple[int, int]:
-    prior_end = prior_offset + prior_limit
-    new_end = new_offset + new_limit
-
-    if prior_offset <= new_offset and new_end <= prior_end:
-        relative_offset = new_offset - prior_offset
-        return relative_offset, new_limit
-    else:
-        raise ValueError("The new range is not a subset of the prior range")
-
-
 async def delete_dataset_from_storage(dataset: DataSet, data_dir: str, logger):
     """
     Delete a dataset from storage
