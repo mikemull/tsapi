@@ -39,8 +39,15 @@ class DataSet(BaseModel):
     file_name: str
     ops: list[OperationSet] = []
 
-    def load(self, data_dir):
+    def load(self, data_dir) -> pl.DataFrame:
         return pl.read_parquet((os.path.join(data_dir, self.file_name)))
+
+    async def load_async(self, data_dir: str) -> pl.DataFrame:
+        """Reads a Parquet file asynchronously using Polars."""
+        loop = asyncio.get_running_loop()
+        # Run the blocking read_parquet in a separate thread
+        df = await loop.run_in_executor(None, self.load, data_dir)
+        return df
 
     @property
     def tscol(self):

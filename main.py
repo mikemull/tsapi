@@ -174,9 +174,11 @@ async def update_opset(opset_id: str, opset: OperationSet) -> OperationSet:
     if opset is None:
         raise HTTPException(status_code=404, detail="Opset not found")
 
+    dataset_data = await MongoClient(settings).get_dataset(opset['dataset_id'])
+
     # Need to check new offset and limits against cached dataset.  If the new
     # range is outside of the cached range, we need to clear the cache.
-    dscache = DatasetCache(settings, logger)
+    dscache = DatasetCache(DataSet(**dataset_data), settings, logger)
     dataset_df = await dscache.get_cached_dataset(opset['id'])
 
     if dataset_df is not None:
@@ -241,26 +243,10 @@ async def get_op_time_series(
     dataset_data = await MongoClient(settings).get_dataset(opset.dataset_id)
     dataset = DataSet(**dataset_data)
 
-    dscache = DatasetCache(config, logger)
+    ds_cache = DatasetCache(dataset, config, logger)
 
     # Check if there's already a dataset for this opset
-    dataset_df = await dscache.get_cached_dataset(opset.id)
-
-    if dataset_df is None:
-        dataset_df = await dscache.get_cached_dataset(opset.dataset_id)
-        if dataset_df is None:
-            # Load the dataset from the source
-            logger.info("Loading dataset from source")
-            dataset = DataSet(**dataset_data)
-            dataset_df = dataset.load(settings.data_dir)
-            logger.info('Loaded dataframe', rows=len(dataset_df))
-            await dscache.cache_dataset(opset.dataset_id, dataset_df)
-
-        dataset_df = dataset_df.slice(opset.offset, opset.limit)
-        logger.info("Sliced dataframe", rows=len(dataset_df))
-        await dscache.cache_dataset(opset.id, dataset_df)
-    else:
-        logger.info("Using cached dataset", rows=len(dataset_df))
+    dataset_df = await ds_cache.get_operation_set(opset)
 
     # We have to do downsampling here because it changes the number of rows
     dataset_df = adjust_frequency(dataset_df, dataset.tscol)
@@ -286,25 +272,9 @@ async def create_forecast(
     dataset_data = await MongoClient(settings).get_dataset(opset.dataset_id)
     dataset = DataSet(**dataset_data)
 
-    dscache = DatasetCache(config, logger)
+    ds_cache = DatasetCache(dataset, config, logger)
     # Check if there's already a dataset for this opset
-    dataset_df = await dscache.get_cached_dataset(opset.id)
-
-    if dataset_df is None:
-        dataset_df = await dscache.get_cached_dataset(opset.dataset_id)
-        if dataset_df is None:
-            # Load the dataset from the source
-            logger.info("Loading dataset from source")
-            dataset = DataSet(**dataset_data)
-            dataset_df = dataset.load(settings.data_dir)
-            logger.info('Loaded dataframe', rows=len(dataset_df))
-            await dscache.cache_dataset(opset.dataset_id, dataset_df)
-
-        dataset_df = dataset_df.slice(opset.offset, opset.limit)
-        logger.info("Sliced dataframe", rows=len(dataset_df))
-        await dscache.cache_dataset(opset.id, dataset_df)
-    else:
-        logger.info("Using cached dataset", rows=len(dataset_df))
+    dataset_df = await ds_cache.get_operation_set(opset)
 
     forecast_result = forecast(
         dataset_df[forecast_req.series_id],
