@@ -77,7 +77,7 @@ class DatasetCache:
                 sub_offset, sub_limit = self.get_new_slice(opset.offset, opset.limit, new_opset.offset, new_opset.limit)
                 # Take a sub-slice so that we don't have to reload from cloud storage
                 new_df = dataset_df.slice(sub_offset, sub_limit)
-                await self.cache_dataset(opset['id'], new_df)
+                await self.cache_dataset(opset.id, new_df)
             except ValueError:
                 # Just remove anything from the cache for this opset and it'll get recached with the new parameters
                 await self.client.delete(opset.id)
