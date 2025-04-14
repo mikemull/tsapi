@@ -39,8 +39,15 @@ class DataSet(BaseModel):
     file_name: str
     ops: list[OperationSet] = []
 
-    def load(self, data_dir):
+    def load(self, data_dir) -> pl.DataFrame:
         return pl.read_parquet((os.path.join(data_dir, self.file_name)))
+
+    async def load_async(self, data_dir: str) -> pl.DataFrame:
+        """Reads a Parquet file asynchronously using Polars."""
+        loop = asyncio.get_running_loop()
+        # Run the blocking read_parquet in a separate thread
+        df = await loop.run_in_executor(None, self.load, data_dir)
+        return df
 
     @property
     def tscol(self):
@@ -210,17 +217,6 @@ def load_electricity_data_source(data_dir) -> pl.DataFrame:
         try_parse_dates=True)
 
     return df
-
-
-def get_new_slice(prior_offset: int, prior_limit: int, new_offset: int, new_limit: int) -> tuple[int, int]:
-    prior_end = prior_offset + prior_limit
-    new_end = new_offset + new_limit
-
-    if prior_offset <= new_offset and new_end <= prior_end:
-        relative_offset = new_offset - prior_offset
-        return relative_offset, new_limit
-    else:
-        raise ValueError("The new range is not a subset of the prior range")
 
 
 async def delete_dataset_from_storage(dataset: DataSet, data_dir: str, logger):
