@@ -1,7 +1,6 @@
 import asyncio
 import io
 import os
-import math
 import re
 from typing import Optional
 
@@ -173,31 +172,6 @@ def parse_timeseries_descriptor(descriptor: str):
         return m.group(1), m.group(2).split(',')
     else:
         raise ValueError("Invalid descriptor")
-
-
-def adjust_frequency(df: pl.DataFrame, timestamp_col: str) -> str:
-    """
-    Infer the frequency of a time series from the data
-
-    :param df: DataFrame with a timestamp column
-    :return: frequency string
-    """
-    if len(df) < MAX_POINTS:
-        return df
-
-    df = df.sort(timestamp_col)
-    freq_counts = (df[timestamp_col] - df[timestamp_col].shift(1)).value_counts().drop_nulls()
-    if len(freq_counts) == 1:
-        max_freq = freq_counts.sort('count', descending=True).head(1)[timestamp_col][0]
-
-        points_per_group = math.floor(len(df) / MAX_POINTS)
-
-        s = int((points_per_group * max_freq).total_seconds())
-    else:
-        time_delta_per_group = (df[timestamp_col].max() - df[timestamp_col].min()) / MAX_POINTS
-        s = int(time_delta_per_group.total_seconds())
-
-    return df.group_by_dynamic(timestamp_col, every=f'{s}s').agg(pl.all().mean())
 
 
 def load_electricity_data(data_dir) -> pl.DataFrame:

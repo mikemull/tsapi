@@ -10,10 +10,10 @@ import structlog
 
 from tsapi.gcs import generate_signed_url
 from tsapi.model.dataset import (
-    DataSet, OperationSet, adjust_frequency,
-    save_dataset, save_dataset_source, DatasetRequest, build_dataset, import_dataset, store_dataset,
+    DataSet, OperationSet, save_dataset, save_dataset_source, DatasetRequest, build_dataset, import_dataset, store_dataset,
     delete_dataset_from_storage
 )
+from tsapi.frequency import adjust_frequency
 from tsapi.model.responses import SignedURLResponse
 from tsapi.model.forecast import ForecastResponse, ForecastRequest
 from tsapi.model.time_series import TimeSeries, TimeRecord
