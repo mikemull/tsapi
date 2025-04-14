@@ -10,13 +10,13 @@ import structlog
 
 from tsapi.gcs import generate_signed_url
 from tsapi.model.dataset import (
-    DataSet, OperationSet, parse_timeseries_descriptor, adjust_frequency, load_electricity_data,
+    DataSet, OperationSet, adjust_frequency,
     save_dataset, save_dataset_source, DatasetRequest, build_dataset, import_dataset, store_dataset,
     delete_dataset_from_storage
 )
 from tsapi.model.responses import SignedURLResponse
 from tsapi.model.forecast import ForecastResponse, ForecastRequest
-from tsapi.model.time_series import TimePoint, TimeSeries, TimeRecord
+from tsapi.model.time_series import TimeSeries, TimeRecord
 from tsapi.mongo_client import MongoClient
 from tsapi.dataset_cache import DatasetCache
 from tsapi.forecast import forecast
@@ -176,8 +176,6 @@ async def update_opset(opset_id: str, opset: OperationSet) -> OperationSet:
 
     dataset_data = await MongoClient(settings).get_dataset(opset['dataset_id'])
 
-    # Need to check new offset and limits against cached dataset.  If the new
-    # range is outside of the cached range, we need to clear the cache.
     ds_cache = DatasetCache(DataSet(**dataset_data), settings, logger)
     await ds_cache.update_operation_set(OperationSet(**opset), OperationSet(**curr_opset))
 
@@ -188,37 +186,6 @@ async def update_opset(opset_id: str, opset: OperationSet) -> OperationSet:
 async def get_opset(opset_id: str) -> OperationSet:
     opset = await MongoClient(settings).get_opset(opset_id)
     return opset
-
-
-@app.get("/tsapi/v1/ts/{series_id}")
-async def get_time_series(series_id: str, offset: int = 0, limit: int = 100, ts_col=None) -> TimeSeries:
-    df = load_electricity_data(settings.data_dir)
-
-    tsdata = []
-    for x in df.slice(offset, limit).iter_rows(named=True):
-        tsdata.append(TimePoint(timestamp=x['timestamp'], x=x[series_id]))
-
-    return TimeSeries(id=series_id, name="electricity",
-                      data=tsdata)
-
-
-@app.get("/tsapi/v1/tsm/{series_ids}")
-async def get_multiple_time_series(series_ids: str, offset: int = 0, limit: int = 100) -> TimeSeries:
-
-    dataset_id, ts_list = parse_timeseries_descriptor(series_ids)
-
-    dataset_data = await MongoClient(settings).get_dataset(dataset_id)
-    dataset = DataSet(**dataset_data)
-    df = dataset.load(settings.data_dir).slice(offset, limit)
-    df_adj = adjust_frequency(df, dataset.tscol)
-
-    tsdata = []
-    for x in df_adj.iter_rows(named=True):
-        tsdata.append(
-            TimeRecord(timestamp=x[dataset.tscol], data={k: x[k] for k in ts_list})
-        )
-
-    return TimeSeries(id=series_ids, name="electricity", data=tsdata)
 
 
 @app.get("/tsapi/v1/tsop/{opset_id}")
