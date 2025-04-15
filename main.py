@@ -10,8 +10,8 @@ import structlog
 
 from tsapi.gcs import generate_signed_url
 from tsapi.model.dataset import (
-    DataSet, OperationSet, save_dataset, save_dataset_source, DatasetRequest, build_dataset, import_dataset, store_dataset,
-    delete_dataset_from_storage
+    DataSet, OperationSet, save_dataset, save_dataset_source, DatasetRequest, build_dataset, import_dataset,
+    store_dataset, delete_dataset_from_storage
 )
 from tsapi.frequency import adjust_frequency
 from tsapi.model.responses import SignedURLResponse
@@ -131,12 +131,21 @@ async def create_dataset(
     :param config:
     :return:
     """
-    if dataset_req.upload_type == 'add':
-        dataset = build_dataset(dataset_req.name, config.data_dir)
-    elif dataset_req.upload_type == 'import':
-        dataset = import_dataset(dataset_req.name, config.data_dir)
-    else:
-        raise HTTPException(status_code=400, detail="Invalid upload type")
+    try:
+
+        if dataset_req.upload_type == 'add':
+            dataset = build_dataset(dataset_req.name, config.data_dir)
+        elif dataset_req.upload_type == 'import':
+            dataset = import_dataset(dataset_req.name, config.data_dir)
+        else:
+            raise HTTPException(status_code=400, detail="Invalid upload type")
+
+    except TsApiNoTimestampError as e:
+        logger.error("No timestamp column found", name=dataset_req.name, error=str(e))
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        logger.error("Unexpected error", name=dataset_req.name, error=str(e))
+        raise HTTPException(status_code=400, detail=str(e))
 
     dataset_id = await MongoClient(config).insert_dataset(dataset.model_dump())
     dataset.id = dataset_id

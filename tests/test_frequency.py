@@ -4,7 +4,7 @@ import pytest
 import polars as pl
 
 from tsapi.frequency import infer_freq, adjust_frequency
-from tsapi.model.dataset import MAX_POINTS
+from tsapi.constants import MAX_POINTS
 
 
 def test_infer_frequency_1d():

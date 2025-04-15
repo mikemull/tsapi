@@ -3,7 +3,15 @@ from datetime import timedelta
 
 import polars as pl
 
-from tsapi.model.dataset import MAX_POINTS
+from tsapi.constants import MAX_POINTS
+
+
+def frequency_counts(series):
+    try:
+        freq_counts = series.dt.replace_time_zone(None).sort().diff().value_counts().drop_nulls()
+    except pl.exceptions.InvalidOperationError:
+        freq_counts = series.dt.date().sort().diff().value_counts().drop_nulls()
+    return freq_counts
 
 
 def infer_freq(series):
@@ -18,10 +26,7 @@ def infer_freq(series):
     # 4) Close, but not exact (from a sensor)
     # 5) No consistency (e.g, taxi pickup times)
     freq = None
-    try:
-        freq_counts = series.dt.replace_time_zone(None).sort().diff().value_counts().drop_nulls()
-    except pl.exceptions.InvalidOperationError:
-        freq_counts = series.dt.date().sort().diff().value_counts().drop_nulls()
+    freq_counts = frequency_counts(series)
     most_common_freq = freq_counts.sort('count', descending=True).head(1)[series.name][0]
     if len(freq_counts) == 1:
         freq = most_common_freq
@@ -46,14 +51,13 @@ def adjust_frequency(df: pl.DataFrame, timestamp_col: str) -> str:
         return df
 
     df = df.sort(timestamp_col)
-    freq_counts = (df[timestamp_col] - df[timestamp_col].shift(1)).value_counts().drop_nulls()
-    if len(freq_counts) == 1:
-        max_freq = freq_counts.sort('count', descending=True).head(1)[timestamp_col][0]
 
+    try:
+        freq = infer_freq(df[timestamp_col])
         points_per_group = math.ceil(len(df) / MAX_POINTS)
 
-        s = int((points_per_group * max_freq).total_seconds())
-    else:
+        s = int((points_per_group * freq).total_seconds())
+    except ValueError:
         time_delta_per_group = (df[timestamp_col].max() - df[timestamp_col].min()) / MAX_POINTS
         s = int(time_delta_per_group.total_seconds())
 
