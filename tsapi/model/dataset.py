@@ -2,14 +2,13 @@ import asyncio
 import io
 import os
 import re
-from datetime import timedelta
-from typing import Optional
+from typing import Optional, Self
 
 import polars as pl
 from pydantic import BaseModel
 
 from tsapi.errors import TsApiNoTimestampError
-from tsapi.frequency import frequency_counts
+from tsapi.frequency import check_time_series
 
 
 class DatasetRequest(BaseModel):
@@ -20,7 +19,7 @@ class DatasetRequest(BaseModel):
 class OperationSet(BaseModel):
     id: str
     dataset_id: str
-    plot: list[str] = []
+    series_ids: list[str] = []
     offset: int = 0
     limit: int = 1000
     dependent: Optional[str] = None
@@ -85,6 +84,28 @@ class DataSet(BaseModel):
             conditions=check_time_series(dataframe[times[0]])
         )
 
+    @classmethod
+    def build(cls, name: str, data_dir: str) -> Self:
+        """
+        Build a DataSet object from a parquet file.
+        """
+        df = pl.read_parquet(os.path.join(data_dir, f'{name}.parquet'))
+        return DataSet.from_dataframe(df, name)
+
+    @classmethod
+    def import_csv(cls, name: str, data_dir: str) -> Self:
+        """
+        Import a dataset from a CSV file and convert it to parquet format.
+        This function will also rename any blank columns in the dataframe.
+        """
+        source_file_name = os.path.join(data_dir, f'{name}.csv')
+        df = pl.read_csv(source_file_name, has_header=True, try_parse_dates=True)
+        df = rename_blank_columns(df)
+
+        df.write_parquet(os.path.join(data_dir, f'{name}.parquet'))
+
+        return DataSet.from_dataframe(df, name)
+
 
 def rename_blank_columns(df: pl.DataFrame):
     iblank = 0
@@ -94,25 +115,6 @@ def rename_blank_columns(df: pl.DataFrame):
             iblank += 1
 
     return df
-
-
-def build_dataset(name: str, data_dir: str) -> DataSet:
-    df = pl.read_parquet((os.path.join(data_dir, f'{name}.parquet')))
-    return DataSet.from_dataframe(df, name)
-
-
-def import_dataset(name: str, data_dir: str) -> DataSet:
-    """
-    Import a dataset from a CSV file and convert it to parquet format.
-    This function will also rename any blank columns in the dataframe.
-    """
-    source_file_name = os.path.join(data_dir, f'{name}.csv')
-    df = pl.read_csv(source_file_name, has_header=True, try_parse_dates=True)
-    df = rename_blank_columns(df)
-
-    df.write_parquet(os.path.join(data_dir, f'{name}.parquet'))
-
-    return DataSet.from_dataframe(df, name)
 
 
 def store_dataset(name: str, data_dir: str, data: bytes, upload_type: str, logger):
@@ -176,25 +178,6 @@ def parse_timeseries_descriptor(descriptor: str):
         raise ValueError("Invalid descriptor")
 
 
-def load_electricity_data(data_dir) -> pl.DataFrame:
-    return pl.read_parquet(os.path.join(data_dir, 'electricityloaddiagrams20112014.parquet'))
-
-
-def load_electricity_data_source(data_dir) -> pl.DataFrame:
-    """
-    Load electricity data
-    """
-    df = pl.read_csv(
-        os.path.join(data_dir, 'LD2011_2014.txt'),
-        separator=';',
-        has_header=True,
-        decimal_comma=True,
-        schema_overrides=pl.Schema({f'MT_{d:03}': pl.Float32() for d in range(1, 371)}),
-        try_parse_dates=True)
-
-    return df
-
-
 async def delete_dataset_from_storage(dataset: DataSet, data_dir: str, logger):
     """
     Delete a dataset from storage
@@ -207,33 +190,3 @@ async def delete_dataset_from_storage(dataset: DataSet, data_dir: str, logger):
         logger.info(f"Error: File '{file_path}' not found.")
 
 
-def check_time_series(series: pl.Series) -> [str]:
-    """
-    This checks for the case where there's a timestamp column, but there
-    might be some other categorical column that means the timestamps
-    are repeated (eg, daily stock prices for multiple stocks).
-    :param df:
-    :param timestamp_col:
-    :return:
-    """
-
-    group_or_filter = series.sort().diff().drop_nulls().min() <= timedelta(0)
-
-    freq_counts = frequency_counts(series)
-
-    uneven = len(freq_counts) > 10
-
-    gaps = False
-    if not group_or_filter:
-        # Don't check for gaps if the dataset needs grouping
-        gaps = freq_counts[series.name].max() > 5 * freq_counts[series.name].min()
-
-    conditions = []
-    if group_or_filter:
-        conditions.append("GroupOrFilter")
-    if uneven:
-        conditions.append("Uneven")
-    if gaps:
-        conditions.append("Gaps")
-
-    return conditions

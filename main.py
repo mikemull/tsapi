@@ -10,7 +10,7 @@ import structlog
 
 from tsapi.gcs import generate_signed_url
 from tsapi.model.dataset import (
-    DataSet, OperationSet, save_dataset, save_dataset_source, DatasetRequest, build_dataset, import_dataset,
+    DataSet, OperationSet, save_dataset, save_dataset_source, DatasetRequest,
     store_dataset, delete_dataset_from_storage
 )
 from tsapi.frequency import adjust_frequency
@@ -134,9 +134,9 @@ async def create_dataset(
     try:
 
         if dataset_req.upload_type == 'add':
-            dataset = build_dataset(dataset_req.name, config.data_dir)
+            dataset = DataSet.build(dataset_req.name, config.data_dir)
         elif dataset_req.upload_type == 'import':
-            dataset = import_dataset(dataset_req.name, config.data_dir)
+            dataset = DataSet.import_csv(dataset_req.name, config.data_dir)
         else:
             raise HTTPException(status_code=400, detail="Invalid upload type")
 
@@ -220,7 +220,7 @@ async def get_op_time_series(
 
     tsdata = []
     for x in dataset_df.iter_rows(named=True):
-        tsdata.append(TimeRecord(timestamp=x[dataset.tscol], data={k: x[k] for k in opset.plot}))
+        tsdata.append(TimeRecord(timestamp=x[dataset.tscol], data={k: x[k] for k in opset.series_ids}))
 
     logger.info("Created time series data")
 
@@ -308,7 +308,7 @@ async def create_signed_url(
 
         return SignedURLResponse(url=signed_url)
     else:
-        # In local mode, we just return a dummy URL
+        # In local mode, we just return a local URL
         return SignedURLResponse(
             url=f'http://localhost:8000/tsapi/v1/upload?name={dataset_req.name}&upload_type={dataset_req.upload_type}'
         )
