@@ -1,4 +1,3 @@
-import asyncio
 import io
 import os
 import re
@@ -9,6 +8,7 @@ from pydantic import BaseModel
 
 from tsapi.errors import TsApiNoTimestampError
 from tsapi.frequency import check_time_series
+from tsapi.dataset_storage import load_async, load_csv_async, delete_dataset_from_storage
 
 
 class DatasetRequest(BaseModel):
@@ -39,14 +39,15 @@ class DataSet(BaseModel):
     conditions: list[str] = []
 
     def load(self, data_dir) -> pl.DataFrame:
-        return pl.read_parquet((os.path.join(data_dir, self.file_name)))
+        return pl.read_parquet(os.path.join(data_dir, self.file_name))
 
     async def load_async(self, data_dir: str) -> pl.DataFrame:
         """Reads a Parquet file asynchronously using Polars."""
-        loop = asyncio.get_running_loop()
-        # Run the blocking read_parquet in a separate thread
-        df = await loop.run_in_executor(None, self.load, data_dir)
+        df = await load_async(os.path.join(data_dir, self.file_name))
         return df
+
+    async def delete(self, data_dir, logger):
+        return await delete_dataset_from_storage(os.path.join(data_dir, f'{self.name}.parquet'), logger)
 
     @property
     def tscol(self):
@@ -85,21 +86,21 @@ class DataSet(BaseModel):
         )
 
     @classmethod
-    def build(cls, name: str, data_dir: str) -> Self:
+    async def build(cls, name: str, data_dir: str) -> Self:
         """
         Build a DataSet object from a parquet file.
         """
-        df = pl.read_parquet(os.path.join(data_dir, f'{name}.parquet'))
+        df = await load_async(os.path.join(data_dir, f'{name}.parquet'))
         return DataSet.from_dataframe(df, name)
 
     @classmethod
-    def import_csv(cls, name: str, data_dir: str) -> Self:
+    async def import_csv(cls, name: str, data_dir: str) -> Self:
         """
         Import a dataset from a CSV file and convert it to parquet format.
         This function will also rename any blank columns in the dataframe.
         """
         source_file_name = os.path.join(data_dir, f'{name}.csv')
-        df = pl.read_csv(source_file_name, has_header=True, try_parse_dates=True)
+        df = await load_csv_async(source_file_name)
         df = rename_blank_columns(df)
 
         df.write_parquet(os.path.join(data_dir, f'{name}.parquet'))
@@ -176,17 +177,5 @@ def parse_timeseries_descriptor(descriptor: str):
         return m.group(1), m.group(2).split(',')
     else:
         raise ValueError("Invalid descriptor")
-
-
-async def delete_dataset_from_storage(dataset: DataSet, data_dir: str, logger):
-    """
-    Delete a dataset from storage
-    """
-    try:
-        file_path = os.path.join(data_dir, f'{dataset.name}.parquet')
-        await asyncio.to_thread(os.remove, file_path)
-        logger.info(f"File '{file_path}' deleted successfully.")
-    except FileNotFoundError:
-        logger.info(f"Error: File '{file_path}' not found.")
 
 

@@ -11,7 +11,7 @@ import structlog
 from tsapi.gcs import generate_signed_url
 from tsapi.model.dataset import (
     DataSet, OperationSet, save_dataset, save_dataset_source, DatasetRequest,
-    store_dataset, delete_dataset_from_storage
+    store_dataset
 )
 from tsapi.frequency import adjust_frequency
 from tsapi.model.responses import SignedURLResponse
@@ -134,9 +134,9 @@ async def create_dataset(
     try:
 
         if dataset_req.upload_type == 'add':
-            dataset = DataSet.build(dataset_req.name, config.data_dir)
+            dataset = await DataSet.build(dataset_req.name, config.data_dir)
         elif dataset_req.upload_type == 'import':
-            dataset = DataSet.import_csv(dataset_req.name, config.data_dir)
+            dataset = await DataSet.import_csv(dataset_req.name, config.data_dir)
         else:
             raise HTTPException(status_code=400, detail="Invalid upload type")
 
@@ -163,7 +163,7 @@ async def delete_dataset(dataset_id: str, config: Settings = Depends(get_setting
     mngo_client = MongoClient(settings)
     dataset = DataSet.model_validate(await mngo_client.get_dataset(dataset_id))
     await mngo_client.delete_dataset(dataset_id)
-    await delete_dataset_from_storage(dataset, config.data_dir, logger)
+    await dataset.delete(config.data_dir, logger)
     return Response(status_code=status.HTTP_204_NO_CONTENT)
 
 
