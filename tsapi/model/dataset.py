@@ -33,7 +33,6 @@ class DataSet(BaseModel):
     series_cols: list[str] = []
     timestamp_cols: list[str] = []
     other_cols: list[str] = []
-    file_name: str
     ops: list[OperationSet] = []
     conditions: list[str] = []
 
@@ -51,6 +50,10 @@ class DataSet(BaseModel):
     @property
     def tscol(self):
         return self.timestamp_cols[0]
+
+    @property
+    def file_name(self):
+        return f'{self.name}.parquet'
 
     @staticmethod
     def from_dataframe(dataframe: pl.DataFrame, name: str):
@@ -80,7 +83,6 @@ class DataSet(BaseModel):
             series_cols=series,
             timestamp_cols=times,
             other_cols=others,
-            file_name=f'{name}.parquet',
             conditions=check_time_series(dataframe[times[0]])
         )
 
