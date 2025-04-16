@@ -1,6 +1,5 @@
 import io
 import os
-import re
 from typing import Optional, Self
 
 import polars as pl
@@ -160,22 +159,3 @@ def save_dataset_source(name: str, data_dir: str, data: bytes):
     df.write_parquet(os.path.join(data_dir, dataset.file_name))
 
     return dataset
-
-
-def parse_timeseries_descriptor(descriptor: str):
-    """
-    Parse a descriptor string into dataset and series names
-
-    The descriptor will be in the form:
-    <dataset_name>:[<series1>,<series2>,...]
-
-    :param descriptor:
-    :return: list of tuples of dataset name and series names
-    """
-    m = re.match(r'(.+):(.+)', descriptor)
-    if m:
-        return m.group(1), m.group(2).split(',')
-    else:
-        raise ValueError("Invalid descriptor")
-
-
