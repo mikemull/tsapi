@@ -1,6 +1,8 @@
 import augurs as aug
 import polars as pl
 
+from tsapi.frequency import infer_freq
+
 
 def forecast(series, timestamp, horizon=10):
     if series.dtype != pl.Float64:
@@ -28,27 +30,4 @@ def forecast(series, timestamp, horizon=10):
 
     return pred_records
 
-# y = df['price'].to_numpy()
-# periods = [3, 4]
-# # Use an AutoETS trend forecaster
-# model = aug.MSTL.ets(periods)
-# model.fit(y)
-# out_of_sample = model.predict(10, level=0.95)
-# print(out_of_sample.point())
-# print(out_of_sample.lower())
-# print(out_of_sample.upper())
-# in_sample = model.predict_in_sample(level=0.95)
-#
-def infer_freq(series):
-    """Given a series that is either a date or a datetime, infer the frequency
-    and return as timedelta.
-    """
-    try:
-        freq = series.dt.datetime().sort().diff().mode()[0]
-    except pl.exceptions.ComputeError:
-        freq = series.dt.date().sort().diff().mode()[0]
 
-    if freq is None:
-        raise ValueError("Unable to infer frequency")
-
-    return freq

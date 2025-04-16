@@ -1,16 +1,15 @@
 import asyncio
 import io
 import os
-import math
 import re
+from datetime import timedelta
 from typing import Optional
 
 import polars as pl
 from pydantic import BaseModel
 
 from tsapi.errors import TsApiNoTimestampError
-
-MAX_POINTS = 10000  # TODO: make this a setting
+from tsapi.frequency import frequency_counts
 
 
 class DatasetRequest(BaseModel):
@@ -38,6 +37,7 @@ class DataSet(BaseModel):
     other_cols: list[str] = []
     file_name: str
     ops: list[OperationSet] = []
+    conditions: list[str] = []
 
     def load(self, data_dir) -> pl.DataFrame:
         return pl.read_parquet((os.path.join(data_dir, self.file_name)))
@@ -81,7 +81,8 @@ class DataSet(BaseModel):
             series_cols=series,
             timestamp_cols=times,
             other_cols=others,
-            file_name=f'{name}.parquet'
+            file_name=f'{name}.parquet',
+            conditions=check_time_series(dataframe[times[0]])
         )
 
 
@@ -175,31 +176,6 @@ def parse_timeseries_descriptor(descriptor: str):
         raise ValueError("Invalid descriptor")
 
 
-def adjust_frequency(df: pl.DataFrame, timestamp_col: str) -> str:
-    """
-    Infer the frequency of a time series from the data
-
-    :param df: DataFrame with a timestamp column
-    :return: frequency string
-    """
-    if len(df) < MAX_POINTS:
-        return df
-
-    df = df.sort(timestamp_col)
-    freq_counts = (df[timestamp_col] - df[timestamp_col].shift(1)).value_counts().drop_nulls()
-    if len(freq_counts) == 1:
-        max_freq = freq_counts.sort('count', descending=True).head(1)[timestamp_col][0]
-
-        points_per_group = math.floor(len(df) / MAX_POINTS)
-
-        s = int((points_per_group * max_freq).total_seconds())
-    else:
-        time_delta_per_group = (df[timestamp_col].max() - df[timestamp_col].min()) / MAX_POINTS
-        s = int(time_delta_per_group.total_seconds())
-
-    return df.group_by_dynamic(timestamp_col, every=f'{s}s').agg(pl.all().mean())
-
-
 def load_electricity_data(data_dir) -> pl.DataFrame:
     return pl.read_parquet(os.path.join(data_dir, 'electricityloaddiagrams20112014.parquet'))
 
@@ -229,3 +205,35 @@ async def delete_dataset_from_storage(dataset: DataSet, data_dir: str, logger):
         logger.info(f"File '{file_path}' deleted successfully.")
     except FileNotFoundError:
         logger.info(f"Error: File '{file_path}' not found.")
+
+
+def check_time_series(series: pl.Series) -> [str]:
+    """
+    This checks for the case where there's a timestamp column, but there
+    might be some other categorical column that means the timestamps
+    are repeated (eg, daily stock prices for multiple stocks).
+    :param df:
+    :param timestamp_col:
+    :return:
+    """
+
+    group_or_filter = series.sort().diff().drop_nulls().min() <= timedelta(0)
+
+    freq_counts = frequency_counts(series)
+
+    uneven = len(freq_counts) > 10
+
+    gaps = False
+    if not group_or_filter:
+        # Don't check for gaps if the dataset needs grouping
+        gaps = freq_counts[series.name].max() > 5 * freq_counts[series.name].min()
+
+    conditions = []
+    if group_or_filter:
+        conditions.append("GroupOrFilter")
+    if uneven:
+        conditions.append("Uneven")
+    if gaps:
+        conditions.append("Gaps")
+
+    return conditions
