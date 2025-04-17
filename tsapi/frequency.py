@@ -62,3 +62,33 @@ def adjust_frequency(df: pl.DataFrame, timestamp_col: str) -> str:
         s = int(time_delta_per_group.total_seconds())
 
     return df.group_by_dynamic(timestamp_col, every=f'{s}s').agg(pl.all().mean())
+
+
+def check_time_series(series: pl.Series) -> [str]:
+    """
+    This checks for the case where there's a timestamp column, but there
+    might be some other categorical column that means the timestamps
+    are repeated (eg, daily stock prices for multiple stocks).
+    :param series: The series to check, presumed to be date or datetime
+    :return: Array of conditions
+    """
+    group_or_filter = series.sort().diff().drop_nulls().min() <= timedelta(0)
+
+    freq_counts = frequency_counts(series)
+
+    uneven = len(freq_counts) > 10
+
+    gaps = False
+    if not group_or_filter:
+        # Don't check for gaps if the dataset needs grouping
+        gaps = freq_counts[series.name].max() > 5 * freq_counts[series.name].min()
+
+    conditions = []
+    if group_or_filter:
+        conditions.append("GroupOrFilter")
+    if uneven:
+        conditions.append("Uneven")
+    if gaps:
+        conditions.append("Gaps")
+
+    return conditions

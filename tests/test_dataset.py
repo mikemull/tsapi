@@ -3,7 +3,7 @@ from datetime import datetime
 import polars as pl
 import pytest
 
-from tsapi.model.dataset import DataSet, rename_blank_columns, parse_timeseries_descriptor
+from tsapi.model.dataset import DataSet, rename_blank_columns
 from tsapi.errors import TsApiNoTimestampError
 
 
@@ -54,13 +54,3 @@ def test_rename(dataset_df):
 def test_dataset_parse_no_time(dataset_df_no_time):
     with pytest.raises(TsApiNoTimestampError):
         DataSet.from_dataframe(dataset_df_no_time, "test")
-
-
-def test_dataset_descriptor():
-    ds, ts = parse_timeseries_descriptor("test:series1,series2,series3")
-    assert ds == "test"
-    assert ts == ["series1", "series2", "series3"]
-
-    ds, ts = parse_timeseries_descriptor("test2:series3")
-    assert ds == "test2"
-    assert ts == ["series3"]
