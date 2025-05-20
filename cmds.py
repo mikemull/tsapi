@@ -39,3 +39,5 @@ def delete_dataset_by_name(name):
 def dataset_info(path):
     df = pl.read_parquet(path)
     print(df.describe())
+    return df
+
